@@ -1,0 +1,39 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Logs
+logs/sessions/
+*.log
+
+# Generated indexes
+data/index/
+
+# Local runtime state
+data/project_state/journal.jsonl
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Check logs
+logs/checks/
+
+# Backup files
+*.bak*
+scripts/*.bak*
+
+# Archived local task snapshots
+data/tasks/archive/

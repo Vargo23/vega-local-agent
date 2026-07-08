@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VEGA Remote Demo</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <main class="chat-shell">
+      <header class="chat-header">
+        <p class="eyebrow">local coding-agent</p>
+        <h1>VEGA Remote Demo</h1>
+        <p class="session-status">
+          Remote demo session active · <span id="session-label">Session: loading</span>
+        </p>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite">
+        <div class="message assistant">
+          <div class="role">VEGA</div>
+          <div class="content">Remote demo mode is ready. Ask about the project, architecture, code, or presentation flow.</div>
+        </div>
+      </section>
+
+      <form id="chat-form" class="composer">
+        <input
+          id="message-input"
+          name="message"
+          type="text"
+          autocomplete="off"
+          placeholder="Type a message for VEGA..."
+          required
+        >
+        <button type="submit">Send</button>
+      </form>
+    </main>
+
+    <script src="/static/chat.js"></script>
+  </body>
+</html>

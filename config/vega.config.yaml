@@ -1,0 +1,53 @@
+﻿agent:
+  name: VEGA
+  version: "0.5.0"
+  role: "Local Project Coding Agent"
+  default_model: "vega-core"
+
+modes:
+  default: "coding-agent"
+  available:
+    - "coding-agent"
+    - "architecture"
+    - "review"
+    - "documentation"
+
+internet:
+  default: false
+  visible_status: true
+  manual_toggle_only: true
+  commands:
+    enable: "/search on"
+    disable: "/search off"
+
+process:
+  require_plan_before_code: true
+  require_block_decomposition: true
+  require_coordinator_review_gate: true
+  user_status_updates: true
+  allow_unverified_claims: false
+
+cli:
+  banner: true
+  show_model: true
+  show_mode: true
+  show_internet_status: true
+  show_project_name: true
+  status_tags:
+    - USER
+    - VEGA
+    - PLAN
+    - CODE
+    - TOOL
+    - REVIEW
+    - DONE
+    - REWORK
+    - WARNING
+    - ERROR
+
+roadmap:
+  current_version: "v0.5.0"
+  next_versions:
+    v0.3: "documents and RAG"
+    v0.5: "task console"
+    next: "undecided"
