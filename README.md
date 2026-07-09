@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v0.7.0
+v0.8.0
 
 ## Features
 
@@ -17,8 +17,10 @@ v0.7.0
 * Documents / RAG commands
 * Local document indexing
 * Search over indexed documents
+* Local document analysis and summaries
+* Model profiles
 * Runtime status command
-* Health-check script
+* Smoke-test script
 
 ## Requirements
 
@@ -49,6 +51,14 @@ python scripts\vega.py
 /docs index
 /docs search <query>
 /docs read <filename>
+/docs analyze <filename>
+/docs summarize <filename>
+/docs ask <question>
+/docs formats
+/model fast
+/model code
+/model docs
+/model deep
 /task
 /task new <title>
 /task plan
@@ -101,7 +111,7 @@ data\tasks\archive\
 
 ## Documents / RAG
 
-VEGA v0.7.0 can read local text documents, build a simple local index, and search it.
+VEGA v0.8.0 can read local documents, build a simple local index, search it, and run deterministic local analysis.
 
 Put documents here:
 
@@ -137,14 +147,85 @@ Supported formats:
 
 ```text
 .txt, .md, .py, .json, .csv
+optional .pdf, optional .docx
 ```
 
-## Health check
+Analysis commands:
+
+```text
+/docs analyze <filename>
+/docs summarize <filename>
+/docs ask <question>
+/docs formats
+```
+
+## v0.8.0 - Global Document Analysis & Model Profiles
+
+Documents:
+
+```text
+data\documents
+data\index\documents_index.json
+```
+
+Commands:
+
+```text
+/docs list
+/docs index
+/docs search <query>
+/docs read <filename>
+/docs analyze <filename>
+/docs summarize <filename>
+/docs ask <question>
+/docs formats
+```
+
+Supported formats:
+
+```text
+.txt
+.md
+.py
+.json
+.csv
+optional .pdf
+optional .docx
+```
+
+Model profiles:
+
+```text
+/model
+/model fast
+/model code
+/model docs
+/model deep
+```
+
+Recommended models:
+
+```text
+qwen2.5-coder:14b as main
+qwen2.5-coder:32b as deep mode only
+```
+
+Optional Ollama setup:
+
+```bat
+ollama pull qwen2.5-coder:14b
+ollama pull qwen2.5-coder:32b
+
+ollama create vega-code-14b -f .\ollama\Modelfile.14b
+ollama create vega-deep-32b -f .\ollama\Modelfile.32b
+```
+
+## Smoke Test
 
 Run:
 
 ```bat
-python scripts\check_v033.py
+python scripts\smoke_test.py
 ```
 
 Expected result:
@@ -157,7 +238,7 @@ Result: OK
 
 Current stable checkpoint:
 
-v0.7.0 - CLI agent with Task Console and local Document Reader / RAG.
+v0.8.0 - Global Document Analysis & Model Profiles.
 
 Next planned stage:
 

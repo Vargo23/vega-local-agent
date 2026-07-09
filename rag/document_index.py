@@ -5,10 +5,11 @@ from pathlib import Path
 
 from rag.document_chunker import chunk_text
 from rag.document_loader import list_documents, read_document
+from scripts.version import VERSION
 
 
 INDEX_PATH = Path("data") / "index" / "documents_index.json"
-INDEX_VERSION = "v0.7.0"
+INDEX_VERSION = VERSION
 
 
 def _get_index_path(project_root: Path) -> Path:
@@ -23,8 +24,19 @@ def build_documents_index(project_root: Path) -> dict:
     chunks_count = 0
 
     for item in list_documents(project_root):
-        document = read_document(project_root, item["name"])
-        chunks = chunk_text(document["content"])
+        try:
+            document = read_document(project_root, item["name"])
+            chunks = chunk_text(document["content"])
+            error = ""
+        except (OSError, ValueError) as exc:
+            document = {
+                "name": item["name"],
+                "extension": item["extension"],
+                "size": item["size"],
+            }
+            chunks = []
+            error = str(exc)
+
         chunks_count += len(chunks)
 
         documents.append({
@@ -32,6 +44,7 @@ def build_documents_index(project_root: Path) -> dict:
             "extension": document["extension"],
             "size": document["size"],
             "chunks": chunks,
+            "error": error,
         })
 
     index = {

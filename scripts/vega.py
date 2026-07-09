@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     from version import APP_NAME, APP_SUBTITLE, VERSION
 except ImportError:
-    VERSION = "v0.7.0"
+    VERSION = "v0.8.0"
     APP_NAME = "VEGA"
     APP_SUBTITLE = "Local Project Coding-Agent"
 
@@ -30,7 +30,7 @@ def configure_output() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v0.7.0.
+FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v0.8.0.
 Твоя задача — помогать пользователю проектировать архитектуру, писать код, проверять код, находить ошибки, давать patch plan и работать как проектный агент, а не как обычный чат-бот.
 
 Обязательные правила поведения:
@@ -50,6 +50,16 @@ def project_root() -> Path:
 
 
 def load_model_name(root: Path) -> str:
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+
+    try:
+        from core.model_router import get_current_profile
+
+        return get_current_profile(root)["model"]
+    except Exception:
+        pass
+
     config_path = root / "config" / "vega.config.yaml"
     try:
         for line in config_path.read_text(encoding="utf-8").splitlines():
@@ -111,7 +121,11 @@ def help_text() -> str:
         "Available commands:",
         "  /help                   Show this help.",
         "  /status                 Show VEGA runtime status",
-        "  /model                  Show current internal Ollama model.",
+        "  /model                  Show current model profile.",
+        "  /model fast             Select fast model profile.",
+        "  /model code             Select code model profile.",
+        "  /model docs             Select docs model profile.",
+        "  /model deep             Select deep model profile.",
         "  /project                Show project path.",
         "  /project status         Show project control status.",
         "  /clear                  Clear the terminal screen.",
@@ -121,6 +135,10 @@ def help_text() -> str:
         "  /docs index             Rebuild local document index",
         "  /docs search <query>    Search indexed documents",
         "  /docs read <filename>   Read a local document",
+        "  /docs analyze <file>    Analyze a local document",
+        "  /docs summarize <file>  Summarize a local document",
+        "  /docs ask <question>    Ask indexed documents",
+        "  /docs formats           Show supported document formats",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -175,7 +193,7 @@ def api_error_message() -> str:
 
 
 def missing_model_message(model: str) -> str:
-    return f"Create the model with: ollama create {model} -f .\\ollama\\Modelfile"
+    return f"Model may not be installed. Run: ollama pull {model}"
 
 
 def call_ollama_chat(model: str, messages: list[dict[str, str]]) -> tuple[bool, str]:
@@ -244,6 +262,7 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     index_path = "data/index/documents_index.json"
     index_file = root / index_path
     documents_indexed = "n/a"
+    model_profile = "n/a"
 
     try:
         from rag.commands import count_indexed_documents, ensure_docs_paths, load_index_safe
@@ -257,11 +276,19 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     except Exception:
         documents_indexed = "n/a"
 
+    try:
+        from core.model_router import get_current_profile
+
+        model_profile = get_current_profile(root)["name"]
+    except Exception:
+        model_profile = "n/a"
+
     task_status, task_title = load_task_state(root)
 
     print("# VEGA status")
     print("")
     print(f"Version: {VERSION}")
+    print(f"Model profile: {model_profile}")
     print(f"Model: {model}")
     print(f"Internet: {INTERNET}")
     print("Task console: enabled")
@@ -274,10 +301,40 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     print(f"Log file: {log_file if log_file else 'n/a'}")
 
 
-def print_model_info(model: str) -> None:
-    print(model)
-    print(f"This is the internal Ollama model. Running it directly with `ollama run {model}` is only for testing.")
-    print("The main agent launch is through the Python CLI: python .\\scripts\\vega.py")
+def print_model_info(root: Path) -> None:
+    from core.model_router import get_current_profile, get_model_profiles
+
+    current = get_current_profile(root)
+    profiles = get_model_profiles()
+
+    print(f"Current model profile: {current['name']}")
+    print(f"Current model: {current['model']}")
+    print("Available profiles:")
+    for name, profile in profiles.items():
+        print(f"  {name}  - {profile['purpose']} ({profile['model']})")
+
+
+def handle_model_command(command: str, root: Path) -> None:
+    from core.model_router import get_model_profiles, set_current_profile
+
+    parts = command.split(maxsplit=1)
+    if len(parts) == 1:
+        print_model_info(root)
+        return
+
+    profile_name = parts[1].strip().lower()
+    profiles = get_model_profiles()
+    if profile_name not in profiles:
+        print(f"Unknown model profile: {profile_name}")
+        print("Available profiles: fast, code, docs, deep")
+        return
+
+    profile = set_current_profile(root, profile_name)
+    print(f"Current model profile: {profile['name']}")
+    print(f"Model: {profile['model']}")
+    print(f"Purpose: {profile['purpose']}")
+    print(f"Model may not be installed. Run: ollama pull {profile['model']}")
+    print("Restart VEGA to use this profile for chat requests.")
 
 
 def print_available_commands() -> None:
@@ -288,6 +345,7 @@ def print_available_commands() -> None:
     print("/project status")
     print("/help")
     print("/status")
+    print("/model")
     print("/docs")
     print("/exit")
 
@@ -519,8 +577,8 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
         print_status(root, log_file, model)
     elif lower == "/workspace":
         handle_workspace_command(root, log_file, model)
-    elif lower == "/model":
-        print_model_info(model)
+    elif lower == "/model" or lower.startswith("/model "):
+        handle_model_command(command, root)
     elif lower == "/project":
         print(root)
     elif lower == "/project status":

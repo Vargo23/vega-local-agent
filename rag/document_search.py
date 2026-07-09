@@ -7,7 +7,7 @@ from rag.document_index import load_documents_index
 
 
 def _query_terms(query: str) -> list[str]:
-    return re.findall(r"[a-zа-я0-9_#./-]+", query.lower(), flags=re.IGNORECASE)
+    return re.findall(r"[\w#./-]+", query.lower(), flags=re.IGNORECASE | re.UNICODE)
 
 
 def search_documents(project_root: Path, query: str, limit: int = 5) -> list[dict]:
