@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     from version import APP_NAME, APP_SUBTITLE, VERSION
 except ImportError:
-    VERSION = "v1.0.0"
+    VERSION = "v1.1.0"
     APP_NAME = "VEGA"
     APP_SUBTITLE = "Local Project Coding-Agent"
 
@@ -30,7 +30,7 @@ def configure_output() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v1.0.0.
+FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v1.1.0.
 Твоя задача — помогать пользователю проектировать архитектуру, писать код, проверять код, находить ошибки, давать patch plan и работать как проектный агент, а не как обычный чат-бот.
 
 Обязательные правила поведения:
