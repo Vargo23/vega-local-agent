@@ -17,7 +17,7 @@ TASKS_DIR = ROOT / "data" / "tasks"
 TASK_ARCHIVE_DIR = TASKS_DIR / "archive"
 TASK_MANAGER = ROOT / "core" / "task_manager.py"
 TASK_VIEWS = ROOT / "ui" / "task_views.py"
-EXPECTED_VERSION = "v0.8.0"
+EXPECTED_VERSION = "v0.9.0"
 
 TASK_MANAGER_FUNCTIONS = [
     "ensure_task_dirs",

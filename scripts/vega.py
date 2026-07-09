@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     from version import APP_NAME, APP_SUBTITLE, VERSION
 except ImportError:
-    VERSION = "v0.8.0"
+    VERSION = "v0.9.0"
     APP_NAME = "VEGA"
     APP_SUBTITLE = "Local Project Coding-Agent"
 
@@ -30,7 +30,7 @@ def configure_output() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v0.8.0.
+FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v0.9.0.
 Твоя задача — помогать пользователю проектировать архитектуру, писать код, проверять код, находить ошибки, давать patch plan и работать как проектный агент, а не как обычный чат-бот.
 
 Обязательные правила поведения:
@@ -122,6 +122,8 @@ def help_text() -> str:
         "  /help                   Show this help.",
         "  /status                 Show VEGA runtime status",
         "  /model                  Show current model profile.",
+        "  /model status           Show Ollama/model status.",
+        "  /model install-help     Show recommended install commands.",
         "  /model fast             Select fast model profile.",
         "  /model code             Select code model profile.",
         "  /model docs             Select docs model profile.",
@@ -130,6 +132,7 @@ def help_text() -> str:
         "  /project status         Show project control status.",
         "  /clear                  Clear the terminal screen.",
         "  /log                    Show current session log path.",
+        "  /doctor                 Run project diagnostics.",
         "  /docs                   Show documents help",
         "  /docs list              Show indexed documents",
         "  /docs index             Rebuild local document index",
@@ -194,6 +197,20 @@ def api_error_message() -> str:
 
 def missing_model_message(model: str) -> str:
     return f"Model may not be installed. Run: ollama pull {model}"
+
+
+def model_unavailable_chat_message(model: str) -> str:
+    return "\n".join([
+        "Current model is not installed.",
+        "Run:",
+        f"  ollama pull {model}",
+        "",
+        "Or switch profile:",
+        "  /model fast",
+        "  /model code",
+        "  /model docs",
+        "  /model deep",
+    ])
 
 
 def call_ollama_chat(model: str, messages: list[dict[str, str]]) -> tuple[bool, str]:
@@ -262,7 +279,9 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     index_path = "data/index/documents_index.json"
     index_file = root / index_path
     documents_indexed = "n/a"
+    chunks_indexed = "n/a"
     model_profile = "n/a"
+    model_installed = "n/a"
 
     try:
         from rag.commands import count_indexed_documents, ensure_docs_paths, load_index_safe
@@ -271,17 +290,24 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
         if index_file.exists():
             index, error = load_index_safe(root)
             documents_indexed = "n/a" if error else str(count_indexed_documents(index))
+            chunks_indexed = "n/a" if error else str(index.get("chunks_count", "n/a"))
         else:
             documents_indexed = "0"
+            chunks_indexed = "0"
     except Exception:
         documents_indexed = "n/a"
+        chunks_indexed = "n/a"
 
     try:
-        from core.model_router import get_current_profile
+        from core.model_router import get_model_status
 
-        model_profile = get_current_profile(root)["name"]
+        model_status = get_model_status(root)
+        model_profile = model_status["current_profile"]
+        model = model_status["current_model"]
+        model_installed = "YES" if model_status["model_installed"] else "NO"
     except Exception:
         model_profile = "n/a"
+        model_installed = "n/a"
 
     task_status, task_title = load_task_state(root)
 
@@ -290,6 +316,7 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     print(f"Version: {VERSION}")
     print(f"Model profile: {model_profile}")
     print(f"Model: {model}")
+    print(f"Model installed: {model_installed}")
     print(f"Internet: {INTERNET}")
     print("Task console: enabled")
     print(f"Current task: {task_status}")
@@ -298,6 +325,7 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     print(f"Index path: {index_path}")
     print(f"Index exists: {'YES' if index_file.exists() else 'NO'}")
     print(f"Documents indexed: {documents_indexed}")
+    print(f"Index chunks: {chunks_indexed}")
     print(f"Log file: {log_file if log_file else 'n/a'}")
 
 
@@ -314,8 +342,39 @@ def print_model_info(root: Path) -> None:
         print(f"  {name}  - {profile['purpose']} ({profile['model']})")
 
 
+def print_model_status(root: Path) -> None:
+    from core.model_router import get_model_status
+
+    status = get_model_status(root)
+    print(f"Current model profile: {status['current_profile']}")
+    print(f"Current model: {status['current_model']}")
+    print(f"Ollama available: {'YES' if status['ollama_available'] else 'NO'}")
+    print(f"Model installed: {'YES' if status['model_installed'] else 'NO'}")
+    if not status["model_installed"]:
+        print("")
+        print("Install command:")
+        print(f"  {status['install_command']}")
+
+
+def print_model_install_help() -> None:
+    print("Recommended models:")
+    print("")
+    print("Fast:")
+    print("  ollama pull qwen2.5-coder:7b")
+    print("")
+    print("Code / Docs:")
+    print("  ollama pull qwen2.5-coder:14b")
+    print("")
+    print("Deep:")
+    print("  ollama pull qwen2.5-coder:32b")
+    print("")
+    print("Optional custom VEGA models:")
+    print("  ollama create vega-code-14b -f .\\ollama\\Modelfile.14b")
+    print("  ollama create vega-deep-32b -f .\\ollama\\Modelfile.32b")
+
+
 def handle_model_command(command: str, root: Path) -> None:
-    from core.model_router import get_model_profiles, set_current_profile
+    from core.model_router import get_model_profiles, get_model_status, set_current_profile
 
     parts = command.split(maxsplit=1)
     if len(parts) == 1:
@@ -323,6 +382,14 @@ def handle_model_command(command: str, root: Path) -> None:
         return
 
     profile_name = parts[1].strip().lower()
+    if profile_name == "status":
+        print_model_status(root)
+        return
+
+    if profile_name == "install-help":
+        print_model_install_help()
+        return
+
     profiles = get_model_profiles()
     if profile_name not in profiles:
         print(f"Unknown model profile: {profile_name}")
@@ -333,8 +400,11 @@ def handle_model_command(command: str, root: Path) -> None:
     print(f"Current model profile: {profile['name']}")
     print(f"Model: {profile['model']}")
     print(f"Purpose: {profile['purpose']}")
-    print(f"Model may not be installed. Run: ollama pull {profile['model']}")
-    print("Restart VEGA to use this profile for chat requests.")
+    status = get_model_status(root)
+    print(f"Model installed: {'YES' if status['model_installed'] else 'NO'}")
+    if not status["model_installed"]:
+        print(f"Install command: {status['install_command']}")
+    print("This profile will be used for the next chat request.")
 
 
 def print_available_commands() -> None:
@@ -345,9 +415,51 @@ def print_available_commands() -> None:
     print("/project status")
     print("/help")
     print("/status")
+    print("/doctor")
     print("/model")
     print("/docs")
     print("/exit")
+
+
+def handle_doctor_command(root: Path) -> None:
+    from core.model_router import get_model_status
+    from rag.document_index import load_documents_index
+
+    documents_dir = root / "data" / "documents"
+    index_path = root / "data" / "index" / "documents_index.json"
+    smoke_test = root / "scripts" / "smoke_test.py"
+    model_status = get_model_status(root)
+    index = load_documents_index(root) if index_path.exists() else None
+    documents_count = index.get("documents_count", 0) if index else 0
+    chunks_count = index.get("chunks_count", 0) if index else 0
+    fixes: list[str] = []
+
+    if not model_status["model_installed"]:
+        fixes.append(f"Run: {model_status['install_command']}")
+    if not index_path.exists():
+        fixes.append("Run: /docs index")
+    if not documents_dir.exists():
+        fixes.append("Create folder: data\\documents")
+
+    print("VEGA Doctor")
+    print(f"Version: {VERSION}")
+    print(f"Project root: {root}")
+    print(f"Ollama available: {'YES' if model_status['ollama_available'] else 'NO'}")
+    print(f"Current profile: {model_status['current_profile']}")
+    print(f"Current model: {model_status['current_model']}")
+    print(f"Model installed: {'YES' if model_status['model_installed'] else 'NO'}")
+    print(f"Documents folder: {'OK' if documents_dir.exists() else 'MISSING'}")
+    print(f"Index file: {'OK' if index_path.exists() else 'MISSING'}")
+    print(f"Documents indexed: {documents_count}")
+    print(f"Chunks indexed: {chunks_count}")
+    smoke_status = "available at scripts\\smoke_test.py" if smoke_test.exists() else "MISSING"
+    print(f"Smoke test: {smoke_status}")
+
+    if fixes:
+        print("")
+        print("Recommended fixes:")
+        for fix in fixes:
+            print(f"- {fix}")
 
 
 UNKNOWN_COMMAND_HINTS = {
@@ -575,6 +687,8 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
         print(help_text())
     elif lower == "/status":
         print_status(root, log_file, model)
+    elif lower == "/doctor":
+        handle_doctor_command(root)
     elif lower == "/workspace":
         handle_workspace_command(root, log_file, model)
     elif lower == "/model" or lower.startswith("/model "):
@@ -624,8 +738,9 @@ def main() -> int:
     ready, details = check_ollama_ready(model)
     if not ready:
         print(details)
-        append_log(log_file, "ERROR", details)
-        return 1
+        print("")
+        print("VEGA will stay in CLI mode. Commands like /docs, /model, /status, /doctor, /help, and /exit are available.")
+        append_log(log_file, "WARNING", details)
 
     while True:
         try:
@@ -659,6 +774,20 @@ def main() -> int:
         if user_input.startswith("/"):
             if not handle_command(user_input, root, log_file, model):
                 return 0
+            continue
+
+        model = load_model_name(root)
+        try:
+            from core.model_router import get_model_status
+
+            model_status = get_model_status(root)
+        except Exception:
+            model_status = {"model_installed": True, "current_model": model}
+
+        if not model_status.get("model_installed", True):
+            response = model_unavailable_chat_message(str(model_status.get("current_model", model)))
+            print(response)
+            append_log(log_file, "ERROR", response)
             continue
 
         messages.append({"role": "user", "content": user_input})

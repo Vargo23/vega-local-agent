@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v0.8.0
+v0.9.0
 
 ## Features
 
@@ -19,6 +19,7 @@ v0.8.0
 * Search over indexed documents
 * Local document analysis and summaries
 * Model profiles
+* Runtime doctor
 * Runtime status command
 * Smoke-test script
 
@@ -44,8 +45,11 @@ python scripts\vega.py
 /status
 /workspace
 /model
+/model status
+/model install-help
 /project
 /log
+/doctor
 /docs
 /docs list
 /docs index
@@ -111,7 +115,7 @@ data\tasks\archive\
 
 ## Documents / RAG
 
-VEGA v0.8.0 can read local documents, build a simple local index, search it, and run deterministic local analysis.
+VEGA v0.9.0 can read local documents, build a simple local index, search it, and run deterministic local analysis.
 
 Put documents here:
 
@@ -159,6 +163,53 @@ Analysis commands:
 /docs formats
 ```
 
+`/docs ask <question>` shows an extractive answer plus numbered sources.
+
+## v0.9.0 - Runtime Polish & Smarter Docs
+
+Model:
+
+```text
+/model
+/model status
+/model install-help
+/model fast
+/model code
+/model docs
+/model deep
+```
+
+Doctor:
+
+```text
+/doctor
+```
+
+Docs:
+
+```text
+/docs ask <question>
+```
+
+Runtime behavior:
+
+```text
+VEGA no longer exits only because the selected model is missing.
+Document commands remain available without the model.
+```
+
+Recommended setup:
+
+```bat
+ollama pull qwen2.5-coder:14b
+```
+
+Optional:
+
+```bat
+ollama pull qwen2.5-coder:32b
+```
+
 ## v0.8.0 - Global Document Analysis & Model Profiles
 
 Documents:
@@ -197,6 +248,8 @@ Model profiles:
 
 ```text
 /model
+/model status
+/model install-help
 /model fast
 /model code
 /model docs
@@ -238,7 +291,7 @@ Result: OK
 
 Current stable checkpoint:
 
-v0.8.0 - Global Document Analysis & Model Profiles.
+v0.9.0 - Runtime Polish & Smarter Docs.
 
 Next planned stage:
 

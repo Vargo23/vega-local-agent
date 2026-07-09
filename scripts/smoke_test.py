@@ -7,12 +7,19 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "v0.8.0"
+EXPECTED_VERSION = "v0.9.0"
 
 
 def status(label: str, ok: bool, detail: str = "") -> str:
     result = "OK" if ok else "FAIL"
     line = f"{label}: {result}"
+    if detail:
+        line += f" - {detail}"
+    return line
+
+
+def warning(label: str, detail: str = "") -> str:
+    line = f"{label}: WARN"
     if detail:
         line += f" - {detail}"
     return line
@@ -121,6 +128,49 @@ def main() -> int:
     except Exception as exc:
         failed = True
         lines.append(status("summarize_document", False, str(exc)))
+
+    try:
+        answer = loaded["rag.document_analyzer"].ask_documents(ROOT, "VEGA")
+        ok = isinstance(answer, dict) and "chunks" in answer and "answer" in answer
+        failed = failed or not ok
+        lines.append(status("ask_documents", ok, f"sources={len(answer.get('chunks', []))}"))
+    except Exception as exc:
+        failed = True
+        lines.append(status("ask_documents", False, str(exc)))
+
+    model_router = loaded.get("core.model_router")
+    try:
+        ollama_available = model_router.is_ollama_available()
+        ok = isinstance(ollama_available, bool)
+        failed = failed or not ok
+        lines.append(status("is_ollama_available", ok, str(ollama_available)))
+    except Exception as exc:
+        failed = True
+        lines.append(status("is_ollama_available", False, str(exc)))
+
+    try:
+        models = model_router.get_installed_ollama_models()
+        ok = isinstance(models, list)
+        failed = failed or not ok
+        detail = f"count={len(models)}"
+        if not models:
+            lines.append(warning("installed ollama models", "none found or Ollama unavailable"))
+        lines.append(status("get_installed_ollama_models", ok, detail))
+    except Exception as exc:
+        failed = True
+        lines.append(status("get_installed_ollama_models", False, str(exc)))
+
+    try:
+        model_status = model_router.get_model_status(ROOT)
+        required = {"current_profile", "current_model", "ollama_available", "model_installed", "install_command"}
+        ok = isinstance(model_status, dict) and required.issubset(model_status)
+        failed = failed or not ok
+        if ok and not model_status["model_installed"]:
+            lines.append(warning("current model", model_status["install_command"]))
+        lines.append(status("get_model_status", ok))
+    except Exception as exc:
+        failed = True
+        lines.append(status("get_model_status", False, str(exc)))
 
     lines.extend(["", f"Result: {'FAIL' if failed else 'OK'}"])
     print("\n".join(lines))

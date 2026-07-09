@@ -26,7 +26,7 @@ ACTION_TERMS = {
 
 
 def _words(text: str) -> list[str]:
-    return re.findall(r"[a-zа-яё0-9_#./-]+", text.lower(), flags=re.IGNORECASE)
+    return re.findall(r"[\w#./-]+", text.lower(), flags=re.IGNORECASE | re.UNICODE)
 
 
 def _sentences(text: str) -> list[str]:
@@ -69,10 +69,9 @@ def _keywords(text: str, limit: int = 12) -> list[str]:
 
 
 def _summary(text: str, max_points: int = 8) -> list[str]:
-    candidates = _sentences(text)
     selected: list[str] = []
 
-    for sentence in candidates:
+    for sentence in _sentences(text):
         clean = " ".join(sentence.split())
         if len(clean) < 20:
             continue
@@ -125,6 +124,37 @@ def summarize_document(project_root: Path, filename: str, max_points: int = 8) -
     }
 
 
+def _extractive_answer(question: str, results: list[dict]) -> str:
+    terms = set(_words(question))
+    answer_parts: list[str] = []
+
+    for result in results[:3]:
+        text = str(result.get("text", ""))
+        sentences = _sentences(text)
+        matching = [
+            " ".join(sentence.split())
+            for sentence in sentences
+            if any(term in sentence.lower() for term in terms)
+        ]
+
+        if matching:
+            answer_parts.extend(matching[:2])
+            continue
+
+        first_lines = [
+            " ".join(line.split())
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        if first_lines:
+            answer_parts.append(first_lines[0])
+
+    if not answer_parts:
+        return "I found related fragments, but no direct answer."
+
+    return " ".join(answer_parts[:4])
+
+
 def ask_documents(project_root: Path, question: str, limit: int = 5) -> dict:
     if load_documents_index(project_root) is None:
         return {
@@ -143,14 +173,9 @@ def ask_documents(project_root: Path, question: str, limit: int = 5) -> dict:
             "error": "",
         }
 
-    answer_parts = []
-    for result in results:
-        text = " ".join(str(result.get("text", "")).split())
-        answer_parts.append(f"{result.get('document', 'unknown')}: {text[:300]}")
-
     return {
         "question": question,
-        "answer": " ".join(answer_parts),
+        "answer": _extractive_answer(question, results),
         "chunks": results,
         "error": "",
     }

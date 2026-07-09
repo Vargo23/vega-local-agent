@@ -61,7 +61,7 @@ def render_startup_screen(
 
             version = VERSION
         except ImportError:
-            version = "v0.8.0"
+            version = "v0.9.0"
     model = model or "vega-core"
     internet_status = internet_status or "OFF"
     status = status or "Ready"

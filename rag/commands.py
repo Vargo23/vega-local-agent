@@ -244,6 +244,7 @@ def docs_ask(project_root: Path, question: str) -> None:
         return
 
     print(f"Question: {question}")
+    print("")
     print("Answer:")
     print(result.get("answer", ""))
 
@@ -253,10 +254,10 @@ def docs_ask(project_root: Path, question: str) -> None:
 
     print("")
     print("Sources:")
-    for item in chunks:
+    for number, item in enumerate(chunks, start=1):
         print(
-            f"- {item.get('document', 'unknown')} "
-            f"chunk {item.get('chunk_id', 0)} "
+            f"{number}. {item.get('document', 'unknown')}, "
+            f"chunk {item.get('chunk_id', 0)}, "
             f"score {item.get('score', 0)}"
         )
 
