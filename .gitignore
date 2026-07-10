@@ -22,6 +22,8 @@ data/index/
 # Local runtime state
 data/project_state/journal.jsonl
 
+# Local Patch Tools state and backups
+data/patches/
 # OS / editor
 .DS_Store
 Thumbs.db

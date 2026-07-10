@@ -1,4 +1,4 @@
-"""Safety checks shared by VEGA's read-only project file tools."""
+"""Safety checks shared by VEGA project file tools."""
 
 from __future__ import annotations
 
@@ -64,6 +64,60 @@ def validate_readable_file(path: str) -> Path:
         raise FileSafetyError(f"Not a file: {path}")
     if is_sensitive_file(candidate):
         raise FileSafetyError("Reading sensitive files is blocked.")
+    return candidate
+
+
+def _reject_symlink_components(path: str) -> None:
+    """Reject traversal and symbolic links in every lexical path component."""
+    candidate_input = Path(path)
+
+    for part in candidate_input.parts:
+        if part == "..":
+            raise FileSafetyError("Parent-directory traversal is not allowed.")
+
+    current = get_project_root().resolve()
+
+    for part in candidate_input.parts:
+        if part in {"", "."}:
+            continue
+
+        current = current / part
+        if current.is_symlink():
+            raise FileSafetyError("Symbolic links are not allowed for writable files.")
+
+
+def validate_writable_text_file(path: str) -> Path:
+    """Validate an existing UTF-8 text file before a controlled write."""
+    if not isinstance(path, str) or not path.strip():
+        raise FileSafetyError("Path must be a non-empty relative path.")
+
+    candidate_input = Path(path)
+    if candidate_input.is_absolute():
+        raise FileSafetyError("Absolute paths are not allowed.")
+
+    _reject_symlink_components(path)
+
+    candidate = safe_path(path)
+
+    if not candidate.is_file():
+        raise FileSafetyError(f"Not a file: {path}")
+
+    if is_sensitive_file(candidate):
+        raise FileSafetyError("Writing sensitive files is blocked.")
+
+    try:
+        raw = candidate.read_bytes()
+    except OSError as exc:
+        raise FileSafetyError(f"Cannot read file before writing: {path}") from exc
+
+    if b"\x00" in raw:
+        raise FileSafetyError("Binary files cannot be modified.")
+
+    try:
+        raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise FileSafetyError("Only valid UTF-8 text files can be modified.") from exc
+
     return candidate
 
 

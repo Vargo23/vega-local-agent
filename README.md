@@ -1,10 +1,10 @@
-﻿# VEGA
+# VEGA
 
 VEGA is a local project coding-agent for working with code, project structure, local tasks, and local documents.
 
 ## Current version
 
-v1.0.0
+v1.2.1
 
 ## Features
 
@@ -15,6 +15,7 @@ v1.0.0
 * Session logs
 * Task Console
 * Documents / RAG commands
+* Confirmed Patch Tools with SHA-256 verification and rollback
 * Local document indexing
 * Search over indexed documents
 * Local document analysis and summaries
@@ -65,6 +66,15 @@ python scripts\vega.py
 /file find <name>
 /file search <query>
 /file summary <path>
+/patch
+/patch list
+/patch list pending
+/patch list applied
+/patch list rolled_back
+/patch show <patch_id>
+/patch propose <target> <proposal> [reason]
+/patch apply <patch_id> CONFIRM
+/patch rollback <patch_id> CONFIRM
 /tools list
 /model fast
 /model code
@@ -102,6 +112,27 @@ sensitive files, private keys, certificates, and binary files are blocked.
 ```
 
 These commands cannot write or delete files and cannot execute shell or Git commands.
+
+## Upcoming VEGA v1.3.0 - Confirmed Patch Tools
+
+VEGA can prepare, inspect, apply, and roll back controlled changes to existing
+UTF-8 text files inside the project workspace.
+
+```text
+/patch
+/patch list
+/patch list pending
+/patch list applied
+/patch list rolled_back
+/patch show <patch_id>
+/patch propose <target> <proposal> [reason]
+/patch apply <patch_id> CONFIRM
+/patch rollback <patch_id> CONFIRM
+```
+
+Applying and rolling back patches requires the exact `CONFIRM` token.
+SHA-256 verification blocks stale patches from overwriting later changes.
+An exact byte-level backup is created before a patch is applied.
 
 ## Task Console
 
@@ -317,15 +348,10 @@ Result: OK
 
 Current stable checkpoint:
 
-v1.0.0 - Stable Local Agent Release.
+v1.2.1 - Safe File Tools and synchronized runtime identity.
 
 Next planned stage:
 
 ```text
-v1.1 - improve document Q&A and project scanner
+v1.3.0 - Confirmed Patch Tools
 ```
-
-
-
-
-
