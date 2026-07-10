@@ -23,6 +23,10 @@ data/project_state/journal.jsonl
 
 # Local Patch Tools state and backups
 data/patches/
+
+# Local Project Memory
+data/memory/*
+!data/memory/.gitkeep
 # OS / editor
 .DS_Store
 Thumbs.db

@@ -24,6 +24,7 @@ from tools.patch_tools import (
     rollback_patch,
     show_patch,
 )
+from memory.project_memory import add_memory, get_memory_stats, list_memories, search_memories
 
 
 TOOL_REGISTRY = {
@@ -43,6 +44,10 @@ TOOL_REGISTRY = {
     "git_diff_cached": git_diff_cached,
     "git_log": git_log,
     "git_branch": git_branch,
+    "memory_add": add_memory,
+    "memory_list": list_memories,
+    "memory_search": search_memories,
+    "memory_stats": get_memory_stats,
 }
 
 

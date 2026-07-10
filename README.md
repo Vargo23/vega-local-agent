@@ -1,10 +1,10 @@
-﻿# VEGA
+# VEGA
 
 VEGA is a local project coding-agent for working with code, project structure, local tasks, and local documents.
 
 ## Current version
 
-v1.4.0
+v1.5.0
 
 ## Features
 
@@ -23,6 +23,7 @@ v1.4.0
 * Runtime doctor
 * Runtime status command
 * Smoke-test script
+* Local Project Memory with explicit storage and bounded model context
 
 ## Requirements
 
@@ -76,6 +77,11 @@ python scripts\vega.py
 /patch apply <patch_id> CONFIRM
 /patch rollback <patch_id> CONFIRM
 /tools list
+/memory
+/memory add <decision|fact|constraint> <text>
+/memory list [kind]
+/memory search <query>
+/memory stats
 /model fast
 /model code
 /model docs
@@ -113,7 +119,7 @@ sensitive files, private keys, certificates, and binary files are blocked.
 
 These commands cannot write or delete files and cannot execute shell or Git commands.
 
-## Upcoming VEGA v1.5.0 - Project Memory
+## VEGA v1.3.0 - Confirmed Patch Tools
 
 VEGA can prepare, inspect, apply, and roll back controlled changes to existing
 UTF-8 text files inside the project workspace.
@@ -133,6 +139,34 @@ UTF-8 text files inside the project workspace.
 Applying and rolling back patches requires the exact `CONFIRM` token.
 SHA-256 verification blocks stale patches from overwriting later changes.
 An exact byte-level backup is created before a patch is applied.
+
+## VEGA v1.5.0 - Project Memory
+
+Project Memory stores project decisions, verified facts, and constraints explicitly
+saved by the user. Data is stored locally in
+`data/memory/project_memory.json` and persists between VEGA runs.
+
+Memory entries are created only through explicit `/memory add` commands.
+VEGA does not infer or save memory automatically from conversations.
+
+```text
+/memory
+/memory add decision <text>
+/memory add fact <text>
+/memory add constraint <text>
+/memory list [kind]
+/memory search <query>
+/memory stats
+```
+
+Version 1.5.0 intentionally has no delete, edit, clear, import, or export commands.
+
+A bounded selection of saved entries is added only to the current model request.
+Project Memory does not accumulate inside the chat history and does not override
+VEGA system safety rules.
+
+If the memory storage is invalid or corrupted, VEGA reports a warning and
+continues chatting without Project Memory.
 
 ## Task Console
 
@@ -348,10 +382,10 @@ Result: OK
 
 Current stable checkpoint:
 
-v1.4.0 - Safe read-only Git Tools integrated into the CLI.
+v1.5.0 - Local Project Memory with explicit storage and bounded model context.
 
 Next planned stage:
 
 ```text
-v1.5.0 - Project Memory
+v1.6.0 - Task Planner improvements
 ```

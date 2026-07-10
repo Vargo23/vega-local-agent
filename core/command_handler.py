@@ -60,6 +60,13 @@ GIT_HELP = """Git commands (safe read-only access):
   /git log <limit>     Show from 1 to 100 recent commits
   /git branch          Show current branch"""
 
+
+MEMORY_HELP = """Project Memory commands:
+  /memory add <kind> <text>  Save a decision, fact, or constraint
+  /memory list [kind]        List saved project memory
+  /memory search <query>     Search saved project memory
+  /memory stats              Show Project Memory statistics"""
+
 def _clean_cli_token(value: str) -> str:
     return value.strip().strip('"').strip("'")
 
@@ -236,6 +243,35 @@ def handle_git_command(command: str) -> str:
         return f"Git command error: {error}"
 
     return result.stdout.rstrip()
+
+def handle_memory_command(command: str, project_root=None) -> str:
+    from memory.project_memory import add_memory, get_memory_stats, list_memories, search_memories
+
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Memory command error: {exc}"
+
+    parts = [_clean_cli_token(part) for part in parts]
+    if len(parts) == 1:
+        return MEMORY_HELP
+
+    action = parts[1].lower()
+    if action == "add" and len(parts) >= 4:
+        result = add_memory(parts[2], " ".join(parts[3:]), project_root)
+    elif action == "list" and len(parts) in {2, 3}:
+        result = list_memories(parts[2] if len(parts) == 3 else None, project_root)
+    elif action == "search" and len(parts) >= 3:
+        result = search_memories(" ".join(parts[2:]), project_root)
+    elif action == "stats" and len(parts) == 2:
+        result = get_memory_stats(project_root)
+    else:
+        return MEMORY_HELP
+
+    if not result["ok"]:
+        return f"Memory command error: {result['error']}"
+    return json.dumps(result["data"], ensure_ascii=False, indent=2)
+
 
 def tools_list_text() -> str:
     from tools.registry import list_tools

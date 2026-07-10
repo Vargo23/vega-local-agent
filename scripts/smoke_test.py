@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "v1.4.0"
+EXPECTED_VERSION = "v1.5.0"
 
 
 def status(label: str, ok: bool, detail: str = "") -> str:
@@ -50,6 +50,7 @@ def main() -> int:
     lines.append(status("scripts.version", version_ok, error or getattr(version_module, "VERSION", "n/a")))
 
     modules = [
+        "memory.project_memory",
         "rag.document_loader",
         "rag.document_chunker",
         "rag.document_index",
