@@ -59,6 +59,13 @@ python scripts\vega.py
 /docs summarize <filename>
 /docs ask <question>
 /docs formats
+/file
+/file list <path>
+/file read <path>
+/file find <name>
+/file search <query>
+/file summary <path>
+/tools list
 /model fast
 /model code
 /model docs
@@ -76,6 +83,25 @@ python scripts\vega.py
 /bye
 /q
 ```
+
+## VEGA v1.2.0 — Safe File Tools
+
+VEGA provides read-only tools for listing project directories, reading bounded UTF-8
+text files, finding files, searching text, and creating deterministic file summaries.
+All paths are relative to the project root. Parent-directory escapes, service folders,
+sensitive files, private keys, certificates, and binary files are blocked.
+
+```text
+/file
+/file list .
+/file read core\agent_runtime.py
+/file find agent_runtime.py
+/file search "class AgentRuntime"
+/file summary core\agent_runtime.py
+/tools list
+```
+
+These commands cannot write or delete files and cannot execute shell or Git commands.
 
 ## Task Console
 

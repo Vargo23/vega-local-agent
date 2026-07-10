@@ -134,6 +134,8 @@ def help_text() -> str:
         "  /docs analyze <file>    Analyze a local document.",
         "  /docs summarize <file>  Summarize a local document.",
         "  /docs ask <question>    Ask indexed documents.",
+        "  /file                  Show safe file command help.",
+        "  /tools list            Show registered tools.",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -405,6 +407,8 @@ def print_available_commands() -> None:
     print("/doctor")
     print("/model")
     print("/docs")
+    print("/file")
+    print("/tools list")
     print("/exit")
 
 
@@ -722,6 +726,12 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
         handle_task_command(command, root)
     elif lower == "/journal":
         handle_journal_command(root)
+    elif lower == "/file" or lower.startswith("/file "):
+        from core.command_handler import handle_file_command
+        print(handle_file_command(command))
+    elif lower == "/tools list":
+        from core.command_handler import tools_list_text
+        print(tools_list_text())
     elif lower in {"/exit", "/bye", "/q"}:
         print("Bye.")
         append_log(log_file, "SYSTEM", "Session closed by user.")
