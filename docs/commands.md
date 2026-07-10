@@ -39,3 +39,27 @@ applying the patch, blocks stale patches, and creates an exact byte-level backup
 
 Path traversal, sensitive files, service directories, and identical target and
 proposal paths are blocked.
+
+## /git commands
+
+Safe read-only Git access:
+
+```text
+/git
+/git status
+/git diff
+/git diff --cached
+/git log
+/git log <limit>
+/git branch
+```
+
+`/git status` shows the short repository status.
+
+`/git diff` shows unstaged changes. `/git diff --cached` shows staged changes.
+
+`/git log` shows 10 recent commits by default. The optional limit must be an integer from 1 to 100.
+
+`/git branch` shows the current branch.
+
+Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, merge, rebase, configuration changes, and arbitrary Git command execution are unavailable.

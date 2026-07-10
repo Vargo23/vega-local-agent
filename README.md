@@ -1,10 +1,10 @@
-# VEGA
+﻿# VEGA
 
 VEGA is a local project coding-agent for working with code, project structure, local tasks, and local documents.
 
 ## Current version
 
-v1.2.1
+v1.4.0
 
 ## Features
 
@@ -94,7 +94,7 @@ python scripts\vega.py
 /q
 ```
 
-## VEGA v1.2.0 — Safe File Tools
+## VEGA v1.2.0 вЂ” Safe File Tools
 
 VEGA provides read-only tools for listing project directories, reading bounded UTF-8
 text files, finding files, searching text, and creating deterministic file summaries.
@@ -113,7 +113,7 @@ sensitive files, private keys, certificates, and binary files are blocked.
 
 These commands cannot write or delete files and cannot execute shell or Git commands.
 
-## Upcoming VEGA v1.3.0 - Confirmed Patch Tools
+## Upcoming VEGA v1.5.0 - Project Memory
 
 VEGA can prepare, inspect, apply, and roll back controlled changes to existing
 UTF-8 text files inside the project workspace.
@@ -348,10 +348,10 @@ Result: OK
 
 Current stable checkpoint:
 
-v1.2.1 - Safe File Tools and synchronized runtime identity.
+v1.4.0 - Safe read-only Git Tools integrated into the CLI.
 
 Next planned stage:
 
 ```text
-v1.3.0 - Confirmed Patch Tools
+v1.5.0 - Project Memory
 ```
