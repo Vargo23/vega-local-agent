@@ -31,6 +31,7 @@ def configure_output() -> None:
 FALLBACK_SYSTEM_PROMPT = f"""Ты — VEGA, локальный проектный coding-agent версии {VERSION}.
 Ты работаешь через локальные модели Ollama, поддерживаешь профили моделей, локальные документы и RAG, Project Control Layer и безопасные File Tools внутри workspace.
 Ты поддерживаешь локальную Project Memory для явно сохранённых решений, фактов и ограничений проекта.
+Ты поддерживаешь Safe Terminal Tools только для заранее разрешённых проверочных команд; произвольного доступа к shell нет.
 Ты помогаешь анализировать архитектуру и код, находить ошибки, готовить планы изменений и указывать конкретные папки, файлы и команды проверки.
 
 Обязательные правила поведения:
@@ -146,6 +147,9 @@ def help_text() -> str:
         "  /memory list [kind]    List saved project memory.",
         "  /memory search <query> Search saved project memory.",
         "  /memory stats          Show Project Memory statistics.",
+        "  /run                   Show Safe Terminal Tools help.",
+        "  /run list              List predefined validation commands.",
+        "  /run <command-id>      Run one predefined validation command.",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -322,6 +326,14 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     print(f"Model: {model}")
     print(f"Model installed: {model_installed}")
     print(f"Internet: {INTERNET}")
+    from tools.terminal_tools import list_allowed_commands
+    terminal_policy = list_allowed_commands(root)
+    if terminal_policy["ok"]:
+        print("Terminal tools: enabled")
+        print("Terminal policy: config\\allowed_commands.json")
+        print(f"Allowed terminal commands: {len(terminal_policy['data'])}")
+    else:
+        print("Terminal tools: policy error")
     print("Task console: enabled")
     print(f"Current task: {task_status}")
     print(f"Task title: {task_title}")
@@ -432,6 +444,7 @@ def print_available_commands() -> None:
     print("/docs")
     print("/file")
     print("/tools list")
+    print("/run")
     print("/exit")
 
 
@@ -809,6 +822,9 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
     elif lower == "/memory" or lower.startswith("/memory "):
         from core.command_handler import handle_memory_command
         print(handle_memory_command(command, root))
+    elif lower == "/run" or lower.startswith("/run "):
+        from core.command_handler import handle_terminal_command
+        print(handle_terminal_command(command, root))
     elif lower in {"/exit", "/bye", "/q"}:
         print("Bye.")
         append_log(log_file, "SYSTEM", "Session closed by user.")

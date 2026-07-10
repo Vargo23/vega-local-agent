@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v1.5.0
+v1.7.0
 
 ## Features
 
@@ -24,6 +24,7 @@ v1.5.0
 * Runtime status command
 * Smoke-test script
 * Local Project Memory with explicit storage and bounded model context
+* Safe Terminal Tools with predefined validation commands
 
 ## Requirements
 
@@ -82,6 +83,9 @@ python scripts\vega.py
 /memory list [kind]
 /memory search <query>
 /memory stats
+/run
+/run list
+/run <command-id>
 /model fast
 /model code
 /model docs
@@ -378,14 +382,47 @@ Expected result:
 Result: OK
 ```
 
+## VEGA v1.7.0 — Safe Terminal Tools
+
+Safe Terminal Tools execute only predefined local diagnostics, compilation, and
+automated checks. Arbitrary shell commands and user-supplied argv are not supported.
+Every command runs from the project root with `shell=False`, a fixed timeout, and
+bounded stdout and stderr.
+
+```text
+/run
+/run list
+/run python-version
+/run compile
+/run tests
+/run smoke
+/run identity
+```
+
+Allowed commands are declared in:
+
+```text
+config\allowed_commands.json
+```
+
+Execution metadata is recorded without command output or environment values in:
+
+```text
+logs\terminal\terminal_commands.jsonl
+```
+
+Editing the JSON policy does not bypass built-in executable and path validation.
+Dangerous executables, absolute paths, parent traversal, UNC paths, symlink escapes,
+and additional CLI arguments remain blocked.
+
 ## Project status
 
 Current stable checkpoint:
 
-v1.5.0 - Local Project Memory with explicit storage and bounded model context.
+v1.7.0 - Safe Terminal Tools with predefined validation commands.
 
 Next planned stage:
 
 ```text
-v1.6.0 - Task Planner improvements
+v1.8.0 - Test Runner improvements and expanded automated coverage.
 ```

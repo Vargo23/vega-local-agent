@@ -67,6 +67,14 @@ MEMORY_HELP = """Project Memory commands:
   /memory search <query>     Search saved project memory
   /memory stats              Show Project Memory statistics"""
 
+
+TERMINAL_HELP = """Terminal commands:
+  /run list
+  /run <command_id>
+
+Only predefined safe validation commands can be executed.
+Arbitrary shell commands are not supported."""
+
 def _clean_cli_token(value: str) -> str:
     return value.strip().strip('"').strip("'")
 
@@ -271,6 +279,60 @@ def handle_memory_command(command: str, project_root=None) -> str:
     if not result["ok"]:
         return f"Memory command error: {result['error']}"
     return json.dumps(result["data"], ensure_ascii=False, indent=2)
+
+
+def handle_terminal_command(command: str, project_root=None) -> str:
+    from tools.terminal_tools import list_allowed_commands, run_allowed_command
+
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Terminal command error: {exc}"
+
+    parts = [_clean_cli_token(part) for part in parts]
+    if len(parts) == 1:
+        return TERMINAL_HELP
+    if len(parts) != 2:
+        return (
+            "Terminal command error: Exactly one command id is allowed.\n"
+            "Run /run list to see allowed commands."
+        )
+
+    command_id = parts[1].strip().lower()
+    if command_id == "list":
+        result = list_allowed_commands(project_root)
+        if not result["ok"]:
+            return f"Terminal command error: {result['error']}"
+        lines = ["Allowed terminal commands:"]
+        for item in result["data"]:
+            state = "enabled" if item["enabled"] else "disabled"
+            lines.append(
+                f"  {item['id']:<16} {item['description']} "
+                f"(timeout: {item['timeout_seconds']}s, {state})"
+            )
+        return "\n".join(lines)
+
+    result = run_allowed_command(command_id, project_root)
+    if result["data"] is None:
+        return (
+            f"Terminal command error: {result['error']}\n"
+            "Run /run list to see allowed commands."
+        )
+
+    data = result["data"]
+    lines = [
+        f"Command: {data['command_id']}",
+        f"Status: {'PASS' if result['ok'] else 'FAIL'}",
+        f"Exit code: {data['returncode']}",
+        f"Duration: {data['duration_ms']} ms",
+    ]
+    if data["stdout"]:
+        lines.extend(["", data["stdout"].rstrip()])
+    if data["stderr"]:
+        lines.extend(["", "Errors:", data["stderr"].rstrip()])
+    if data.get("warning"):
+        lines.extend(["", data["warning"]])
+    return "\n".join(lines)
 
 
 def tools_list_text() -> str:

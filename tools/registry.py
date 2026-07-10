@@ -25,6 +25,7 @@ from tools.patch_tools import (
     show_patch,
 )
 from memory.project_memory import add_memory, get_memory_stats, list_memories, search_memories
+from tools.terminal_tools import list_allowed_commands, run_allowed_command
 
 
 TOOL_REGISTRY = {
@@ -48,6 +49,8 @@ TOOL_REGISTRY = {
     "memory_list": list_memories,
     "memory_search": search_memories,
     "memory_stats": get_memory_stats,
+    "terminal_list": list_allowed_commands,
+    "terminal_run": run_allowed_command,
 }
 
 

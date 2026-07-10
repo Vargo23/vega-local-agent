@@ -5,9 +5,11 @@ import importlib
 import sys
 from pathlib import Path
 
+from version import VERSION
+
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "v1.5.0"
+EXPECTED_VERSION = VERSION
 
 
 def status(label: str, ok: bool, detail: str = "") -> str:

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "default_timeout_seconds": 60,
+  "max_output_chars": 50000,
+  "commands": [
+    {
+      "id": "python-version",
+      "description": "Show the active Python version.",
+      "argv": ["python", "--version"],
+      "timeout_seconds": 10,
+      "enabled": true
+    },
+    {
+      "id": "compile",
+      "description": "Compile VEGA Python modules.",
+      "argv": ["python", "-m", "compileall", "core", "scripts", "tools", "memory", "tests"],
+      "timeout_seconds": 120,
+      "enabled": true
+    },
+    {
+      "id": "tests",
+      "description": "Run VEGA unit tests.",
+      "argv": ["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"],
+      "timeout_seconds": 180,
+      "enabled": true
+    },
+    {
+      "id": "smoke",
+      "description": "Run the VEGA smoke test.",
+      "argv": ["python", "scripts\\smoke_test.py"],
+      "timeout_seconds": 60,
+      "enabled": true
+    },
+    {
+      "id": "identity",
+      "description": "Run the VEGA identity check.",
+      "argv": ["python", "scripts\\check_identity.py"],
+      "timeout_seconds": 30,
+      "enabled": true
+    }
+  ]
+}
