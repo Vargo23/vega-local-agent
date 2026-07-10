@@ -9,6 +9,13 @@ from tools.file_tools import (
     search_in_files,
     summarize_file,
 )
+from tools.git_tools import (
+    git_branch,
+    git_diff,
+    git_diff_cached,
+    git_log,
+    git_status,
+)
 from tools.patch_tools import (
     apply_patch,
     list_patches,
@@ -31,6 +38,11 @@ TOOL_REGISTRY = {
     "show_patch": show_patch,
     "apply_patch": apply_patch,
     "rollback_patch": rollback_patch,
+    "git_status": git_status,
+    "git_diff": git_diff,
+    "git_diff_cached": git_diff_cached,
+    "git_log": git_log,
+    "git_branch": git_branch,
 }
 
 

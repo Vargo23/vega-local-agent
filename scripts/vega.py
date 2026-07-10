@@ -136,6 +136,7 @@ def help_text() -> str:
         "  /docs ask <question>    Ask indexed documents.",
         "  /file                  Show safe file command help.",
         "  /patch                 Show safe patch command help.",
+        "  /git                   Show safe Git command help.",
         "  /tools list            Show registered tools.",
         "",
         "Task Console:",
@@ -733,6 +734,9 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
     elif lower == "/patch" or lower.startswith("/patch "):
         from core.command_handler import handle_patch_command
         print(handle_patch_command(command))
+    elif lower == "/git" or lower.startswith("/git "):
+        from core.command_handler import handle_git_command
+        print(handle_git_command(command))
     elif lower == "/tools list":
         from core.command_handler import tools_list_text
         print(tools_list_text())

@@ -12,6 +12,13 @@ from tools.file_tools import (
     search_in_files,
     summarize_file,
 )
+from tools.git_tools import (
+    git_branch,
+    git_diff,
+    git_diff_cached,
+    git_log,
+    git_status,
+)
 from tools.patch_tools import (
     apply_patch,
     list_patches,
@@ -44,6 +51,14 @@ Examples:
   /patch show patch-20260710T150136Z-6ba02018
   /patch apply patch-20260710T150136Z-6ba02018 CONFIRM"""
 
+
+GIT_HELP = """Git commands (safe read-only access):
+  /git status          Show short repository status
+  /git diff            Show unstaged changes
+  /git diff --cached   Show staged changes
+  /git log             Show 10 recent commits
+  /git log <limit>     Show from 1 to 100 recent commits
+  /git branch          Show current branch"""
 
 def _clean_cli_token(value: str) -> str:
     return value.strip().strip('"').strip("'")
@@ -162,6 +177,65 @@ def handle_patch_command(command: str) -> str:
         indent=2,
     )
 
+
+def handle_git_command(command: str) -> str:
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Git command error: {exc}"
+
+    if len(parts) == 1:
+        return GIT_HELP
+
+    action = _clean_cli_token(parts[1]).lower()
+
+    if action == "status" and len(parts) == 2:
+        result = git_status(".")
+
+        if result.ok and not result.stdout.strip():
+            return "Git working tree is clean."
+
+    elif action == "diff" and len(parts) == 2:
+        result = git_diff(".")
+
+        if result.ok and not result.stdout.strip():
+            return "No unstaged changes."
+
+    elif (
+        action == "diff"
+        and len(parts) == 3
+        and _clean_cli_token(parts[2]).lower() == "--cached"
+    ):
+        result = git_diff_cached(".")
+
+        if result.ok and not result.stdout.strip():
+            return "No staged changes."
+
+    elif action == "log" and len(parts) in {2, 3}:
+        if len(parts) == 2:
+            limit = 10
+        else:
+            try:
+                limit = int(_clean_cli_token(parts[2]))
+            except ValueError:
+                return "Git command error: log limit must be an integer from 1 to 100."
+
+        result = git_log(".", limit)
+
+    elif action == "branch" and len(parts) == 2:
+        result = git_branch(".")
+
+        if result.ok and not result.stdout.strip():
+            return "Git repository is in detached HEAD state."
+
+    else:
+        return GIT_HELP
+
+    if not result.ok:
+        error = result.stderr.strip() or "Git command failed."
+        return f"Git command error: {error}"
+
+    return result.stdout.rstrip()
 
 def tools_list_text() -> str:
     from tools.registry import list_tools
