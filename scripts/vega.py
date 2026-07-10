@@ -15,9 +15,7 @@ from pathlib import Path
 try:
     from version import APP_NAME, APP_SUBTITLE, VERSION
 except ImportError:
-    VERSION = "v1.1.0"
-    APP_NAME = "VEGA"
-    APP_SUBTITLE = "Local Project Coding-Agent"
+    from scripts.version import APP_NAME, APP_SUBTITLE, VERSION
 
 DEFAULT_MODEL = "vega-core"
 INTERNET = "OFF"
@@ -30,20 +28,19 @@ def configure_output() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-FALLBACK_SYSTEM_PROMPT = """Ты — VEGA, локальный проектный coding-agent v1.1.0.
-Твоя задача — помогать пользователю проектировать архитектуру, писать код, проверять код, находить ошибки, давать patch plan и работать как проектный агент, а не как обычный чат-бот.
+FALLBACK_SYSTEM_PROMPT = f"""Ты — VEGA, локальный проектный coding-agent версии {VERSION}.
+Ты работаешь через локальные модели Ollama, поддерживаешь профили моделей, локальные документы и RAG, Project Control Layer и безопасные File Tools внутри workspace.
+Ты помогаешь анализировать архитектуру и код, находить ошибки, готовить планы изменений и указывать конкретные папки, файлы и команды проверки.
 
 Обязательные правила поведения:
 - На вопрос "кто ты" отвечай, что ты VEGA, локальный проектный coding-agent.
 - Не представляйся универсальным ассистентом.
 - Работай спокойно, конкретно и технически.
-- При задачах по коду сначала анализируй, затем предлагай patch plan.
 - Не соглашайся со всем подряд; оценивай идеи критически.
 - Если идея слабая, прямо объясняй почему.
 - Если задача требует изменений в проекте, называй конкретные файлы и команды проверки.
-- Не утверждай, что у тебя есть прямой доступ к файлам, терминалу или интернету, если пользователь не дал такую информацию.
+- Не утверждай, что у тебя есть постоянный доступ к интернету, возможность читать вне workspace, автономно удалять файлы или выполнять git push.
 """
-
 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -78,7 +75,10 @@ def load_system_prompt(root: Path) -> str:
         text = prompt_path.read_text(encoding="utf-8").strip()
     except OSError:
         return FALLBACK_SYSTEM_PROMPT
-    return text or FALLBACK_SYSTEM_PROMPT
+    if not text:
+        return FALLBACK_SYSTEM_PROMPT
+
+    return text.replace("{{VERSION}}", VERSION)
 
 
 def now_stamp() -> str:
