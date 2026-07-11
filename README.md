@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v1.10.0
+v1.11.0
 
 ## Features
 
@@ -27,6 +27,7 @@ v1.10.0
 * Safe Terminal Tools with predefined validation commands
 * Controlled Internet Layer with explicit session-level enablement and safe HTTPS fetching
 * Documentation Builder with policy validation, managed documents, and pending patch generation
+* Process-local Agent Modes for architecture, coding, review, debugging, teaching, and release management
 
 ## Requirements
 
@@ -117,6 +118,10 @@ python scripts\vega.py
 /internet on
 /internet off
 /web fetch <https-url>
+/mode
+/mode list
+/mode set <architect|coder|reviewer|debugger|teacher|release_manager>
+/mode reset
 /docgen
 /docgen status
 /docgen check

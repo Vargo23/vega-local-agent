@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.11.0 - Agent Modes
+
+Added:
+
+* Configurable agent modes in `config/modes.json`.
+* Mode registry and process-local mode session in `core/agent_modes.py`.
+* `/mode`, `/mode list`, `/mode set <name>`, and `/mode reset` commands.
+* Architect, coder, reviewer, debugger, teacher, and release-manager modes.
+* Active mode instructions in the model system context.
+* Unit and command-handler tests for mode loading, switching, resetting, and validation.
+
+Changed:
+
+* VEGA starts in the `coder` mode by default.
+* CLI help now includes Agent Mode commands.
+* Patch application and rollback receive the active mode policy.
+* Current version updated from v1.10.0 to v1.11.0.
+
+Security:
+
+* Modes without code-change permission block `/patch apply` and `/patch rollback`.
+* Unknown mode names are rejected without changing the active mode.
+* Mode state is process-local and resets when VEGA restarts.
+
 ## v1.10.0 - Documentation Builder
 
 Added:

@@ -152,7 +152,7 @@ VEGA не должна:
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v1.10.0`
+Project version: `v1.11.0`
 
 This section is generated from the current project tree.
 
@@ -175,6 +175,7 @@ This section is generated from the current project tree.
 
 ### Core modules
 
+- `core/agent_modes.py`
 - `core/command_handler.py`
 - `core/internet_state.py`
 - `core/model_router.py`

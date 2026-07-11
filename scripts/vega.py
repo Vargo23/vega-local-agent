@@ -169,6 +169,10 @@ def help_text() -> str:
         "  /internet on           Enable internet for this VEGA process.",
         "  /internet off          Disable internet for this VEGA process.",
         "  /web fetch <https-url> Fetch one bounded text resource.",
+        "  /mode                  Show the active agent mode.",
+        "  /mode list             List available agent modes.",
+        "  /mode set <name>       Activate an agent mode.",
+        "  /mode reset            Restore the default agent mode.",
     "  /docgen                Show Documentation Builder help.",
     "  /docgen status         Show project documentation status.",
     "  /docgen check          Check required project documentation.",
@@ -809,7 +813,7 @@ def handle_task_command(command: str, root: Path) -> None:
     print_unknown_command(stripped)
 
 
-def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool:
+def handle_command(command: str, root: Path, log_file: Path, model: str, mode_session=None) -> bool:
     command = command.strip()
     lower = command.lower()
 
@@ -842,7 +846,7 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
         print(handle_file_command(command))
     elif lower == "/patch" or lower.startswith("/patch "):
         from core.command_handler import handle_patch_command
-        print(handle_patch_command(command))
+        print(handle_patch_command(command, mode_session))
     elif lower == "/git" or lower.startswith("/git "):
         from core.command_handler import handle_git_command
         print(handle_git_command(command))
@@ -864,6 +868,13 @@ def handle_command(command: str, root: Path, log_file: Path, model: str) -> bool
     elif lower == "/web" or lower.startswith("/web "):
         from core.command_handler import handle_web_command
         print(handle_web_command(command, root))
+    elif lower == "/mode" or lower.startswith("/mode "):
+        from core.command_handler import handle_mode_command
+
+        if mode_session is None:
+            print("Mode command error: mode session is unavailable.")
+        else:
+            print(handle_mode_command(command, mode_session))
     elif lower == "/docgen" or lower.startswith("/docgen "):
         from core.command_handler import handle_docgen_command
 
@@ -888,6 +899,14 @@ def main() -> int:
 
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
+
+    from core.agent_modes import ModeRegistry, ModeSession
+
+    mode_registry = ModeRegistry(
+        root / "config" / "modes.json"
+    )
+    mode_session = ModeSession(mode_registry)
+
     from ui.startup_screen import render_startup_screen
 
     render_startup_screen(
@@ -937,7 +956,7 @@ def main() -> int:
         append_log(log_file, "USER", user_input)
 
         if user_input.startswith("/"):
-            if not handle_command(user_input, root, log_file, model):
+            if not handle_command(user_input, root, log_file, model, mode_session):
                 return 0
             continue
 
@@ -972,6 +991,11 @@ def main() -> int:
                 print(warning)
                 append_log(log_file, "WARNING", warning)
                 memory_warning_errors.add(error)
+
+        request_messages[0]["content"] += (
+            "\n\n"
+            + mode_session.active_mode.build_instruction()
+        )
 
         ok, response = call_ollama_chat(model, request_messages)
         label = "VEGA" if ok else "ERROR"

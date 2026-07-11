@@ -66,10 +66,33 @@ Changes are prepared through Patch Tools:
 
 /patch rollback <patch\_id> CONFIRM
 
+## Agent Mode enforcement
+
+VEGA Agent Modes are process-local execution policies.
+
+Modes with `allow_code_changes: false` block:
+
+* `/patch apply <patch_id> CONFIRM`
+* `/patch rollback <patch_id> CONFIRM`
+
+The restriction applies to:
+
+* `architect`
+* `reviewer`
+* `teacher`
+* `release_manager`
+
+The `coder` and `debugger` modes may perform confirmed patch operations. The exact
+`CONFIRM` token, SHA-256 validation, workspace restrictions, and Patch Tools safety
+checks remain mandatory in every mode.
+
+Mode instructions added to the model context do not replace command-level safety
+enforcement.
+
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v1.10.0`
+Project version: `v1.11.0`
 
 ### Documentation Builder policy
 

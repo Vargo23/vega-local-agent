@@ -67,7 +67,7 @@ Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, mer
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v1.10.0`
+Project version: `v1.11.0`
 
 This section is generated from `scripts/vega.py`.
 
@@ -95,6 +95,7 @@ This section is generated from `scripts/vega.py`.
 /patch
 /git
 /memory
+/mode
 /log
 /clear
 ```
@@ -136,6 +137,10 @@ This section is generated from `scripts/vega.py`.
 /internet on           Enable internet for this VEGA process.
 /internet off          Disable internet for this VEGA process.
 /web fetch <https-url> Fetch one bounded text resource.
+/mode                  Show the active agent mode.
+/mode list             List available agent modes.
+/mode set <name>       Activate an agent mode.
+/mode reset            Restore the default agent mode.
 /docgen                Show Documentation Builder help.
 /docgen status         Show project documentation status.
 /docgen check          Check required project documentation.

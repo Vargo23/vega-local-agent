@@ -120,6 +120,21 @@ DOCGEN_HELP = """Documentation Builder commands:
 
 Documentation Builder does not apply documentation changes automatically."""
 
+MODE_HELP = """Agent Mode commands:
+  /mode                  Show the active mode
+  /mode list             List available modes
+  /mode set <name>       Activate a mode
+  /mode reset            Restore the default mode
+
+Available modes:
+  architect
+  coder
+  reviewer
+  debugger
+  teacher
+  release_manager"""
+
+
 def _clean_cli_token(value: str) -> str:
     return value.strip().strip('"').strip("'")
 
@@ -159,7 +174,7 @@ def handle_file_command(command: str) -> str:
     )
 
 
-def handle_patch_command(command: str) -> str:
+def handle_patch_command(command: str, mode_session=None) -> str:
     try:
         parts = shlex.split(command, posix=False)
     except ValueError as exc:
@@ -169,6 +184,17 @@ def handle_patch_command(command: str) -> str:
         return PATCH_HELP
 
     action = _clean_cli_token(parts[1]).lower()
+
+    if (
+        action in {"apply", "rollback"}
+        and mode_session is not None
+        and not mode_session.active_mode.allow_code_changes
+    ):
+        return (
+            "Patch command blocked: "
+            f"agent mode '{mode_session.active_mode_name}' "
+            "does not allow code changes."
+        )
 
     if action == "list":
         if len(parts) > 3:
@@ -752,6 +778,72 @@ def handle_docgen_command(
         return "\n".join(lines)
 
     return DOCGEN_HELP
+
+
+
+def handle_mode_command(command: str, mode_session) -> str:
+    """Handle process-local VEGA agent mode commands."""
+
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Mode command error: {exc}"
+
+    parts = [
+        _clean_cli_token(part)
+        for part in parts
+    ]
+
+    if len(parts) == 1:
+        mode = mode_session.active_mode
+        return "\n".join(
+            [
+                f"Active mode: {mode.name}",
+                f"Description: {mode.description}",
+                (
+                    "Code changes: "
+                    f"{'allowed' if mode.allow_code_changes else 'blocked'}"
+                ),
+                (
+                    "Review required: "
+                    f"{'yes' if mode.review_required else 'no'}"
+                ),
+            ]
+        )
+
+    action = parts[1].lower()
+
+    if action == "list" and len(parts) == 2:
+        lines = ["Available agent modes:"]
+
+        for mode in mode_session.registry.list_modes():
+            marker = "*" if mode.name == mode_session.active_mode_name else " "
+            lines.append(
+                f" {marker} {mode.name:<18} {mode.description}"
+            )
+
+        return "\n".join(lines)
+
+    if action == "reset" and len(parts) == 2:
+        mode = mode_session.reset()
+        return f"Agent mode reset to: {mode.name}"
+
+    if action == "set" and len(parts) == 3:
+        requested_mode = parts[2].lower()
+
+        try:
+            mode = mode_session.set_mode(requested_mode)
+        except KeyError as exc:
+            return f"Mode command error: {exc.args[0]}"
+
+        return "\n".join(
+            [
+                f"Agent mode activated: {mode.name}",
+                f"Description: {mode.description}",
+            ]
+        )
+
+    return MODE_HELP
 
 
 def tools_list_text() -> str:
