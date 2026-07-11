@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.vega import (
+from core.agent_runtime import (
     handle_command,
     help_text,
     print_available_commands,

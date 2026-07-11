@@ -1,4 +1,4 @@
-import io
+﻿import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -9,7 +9,7 @@ from core.internet_state import (
     reset_internet_state,
     set_internet_enabled,
 )
-from scripts.vega import (
+from core.agent_runtime import (
     handle_command,
     help_text,
     internet_label,
