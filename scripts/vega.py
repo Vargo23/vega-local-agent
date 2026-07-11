@@ -177,6 +177,10 @@ def help_text() -> str:
     "  /docgen status         Show project documentation status.",
     "  /docgen check          Check required project documentation.",
         "  /docgen build          Create pending documentation patches.",
+        "  /release                Show Release Manager help.",
+        "  /release status         Show release readiness.",
+        "  /release check          Run configured release checks.",
+        "  /release notes          Build release notes draft.",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -479,6 +483,7 @@ def print_available_commands() -> None:
     print("/internet")
     print("/web")
     print("/docgen")
+    print("/release")
     print("/exit")
 
 
@@ -879,6 +884,10 @@ def handle_command(command: str, root: Path, log_file: Path, model: str, mode_se
         from core.command_handler import handle_docgen_command
 
         print(handle_docgen_command(command, root))
+    elif lower == "/release" or lower.startswith("/release "):
+        from core.command_handler import handle_release_command
+
+        print(handle_release_command(command, root))
     elif lower in {"/exit", "/bye", "/q"}:
         print("Bye.")
         append_log(log_file, "SYSTEM", "Session closed by user.")

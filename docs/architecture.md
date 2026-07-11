@@ -152,7 +152,7 @@ VEGA не должна:
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v1.11.0`
+Project version: `v1.12.0`
 
 This section is generated from the current project tree.
 
@@ -193,6 +193,7 @@ This section is generated from the current project tree.
 - `tools/git_tools.py`
 - `tools/patch_tools.py`
 - `tools/registry.py`
+- `tools/release_tools.py`
 - `tools/terminal_tools.py`
 - `tools/test_tools.py`
 - `tools/web_tools.py`
@@ -205,3 +206,16 @@ scripts -> core -> tools -> policies and project data
 
 Generated documentation changes are proposed through Patch Tools and are not applied automatically.
 <!-- VEGA DOCGEN END: architecture -->
+
+## Release Manager
+
+The Release Manager is a read-only release-readiness layer.
+
+```text
+scripts/vega.py
+    -> core/command_handler.py
+        -> tools/release_tools.py
+            -> config/release_policy.json
+```
+
+It checks release state but does not commit, tag, push, or publish releases.

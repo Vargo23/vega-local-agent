@@ -40,6 +40,12 @@ from tools.patch_tools import (
     rollback_patch,
     show_patch,
 )
+from tools.release_tools import (
+    build_release_notes,
+    get_release_status,
+    load_release_policy,
+    run_release_check,
+)
 from tools.terminal_tools import (
     list_allowed_commands,
     run_allowed_command,
@@ -98,6 +104,12 @@ TOOL_REGISTRY = {
     "documentation_policy_load": load_documentation_policy,
     "documentation_status": get_documentation_status,
     "documentation_check": check_documentation,
+
+    # Release Manager
+    "release_policy_load": load_release_policy,
+    "release_status": get_release_status,
+    "release_check": run_release_check,
+    "release_notes": build_release_notes,
 }
 
 

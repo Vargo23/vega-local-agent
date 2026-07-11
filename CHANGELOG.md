@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.12.0 - Release Manager
+
+Added:
+
+* Read-only release policy in `config/release_policy.json`.
+* Release readiness tools in `tools/release_tools.py`.
+* `/release`, `/release status`, `/release check`, and `/release notes` commands.
+* Release Manager registration in the shared Tool Registry.
+* Branch, working-tree, required-file, documentation, identity, compilation, and test checks.
+* In-memory release-notes generation from the current `CHANGELOG.md` section.
+* Release notes storage in `docs/releases/`.
+* Unit and command-handler tests for Release Manager.
+
+Changed:
+
+* CLI help and available-command output include Release Manager.
+* Generated architecture, command, and security documentation includes v1.12.0 state.
+* Current version updated from v1.11.0 to v1.12.0.
+
+Security:
+
+* Release Manager is read-only.
+* Automatic commit, tag, push, and GitHub release publishing are forbidden by policy.
+* Release checks accept only predefined validation command identifiers.
+* Release paths must remain inside the active project root.
+
 ## v1.11.0 - Agent Modes
 
 Added:

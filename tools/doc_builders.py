@@ -458,6 +458,7 @@ def _render_security_block(
         "- `config/allowed_commands.json`",
         "- `config/internet_policy.json`",
         "- `config/documentation_policy.json`",
+        "- `config/release_policy.json`",
         "",
         "### Enforcement principles",
         "",

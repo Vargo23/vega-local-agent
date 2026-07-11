@@ -67,7 +67,7 @@ Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, mer
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v1.11.0`
+Project version: `v1.12.0`
 
 This section is generated from `scripts/vega.py`.
 
@@ -91,6 +91,7 @@ This section is generated from `scripts/vega.py`.
 /internet
 /web
 /docgen
+/release
 /exit
 /patch
 /git
@@ -145,6 +146,10 @@ This section is generated from `scripts/vega.py`.
 /docgen status         Show project documentation status.
 /docgen check          Check required project documentation.
 /docgen build          Create pending documentation patches.
+/release                Show Release Manager help.
+/release status         Show release readiness.
+/release check          Run configured release checks.
+/release notes          Build release notes draft.
 /workspace              Show workspace state
 /task                   Show task command help
 /exit                   Exit VEGA
@@ -152,3 +157,14 @@ This section is generated from `scripts/vega.py`.
 /project | /project status | /log | /clear
 ```
 <!-- VEGA DOCGEN END: commands -->
+
+## Release Manager commands
+
+```text
+/release
+/release status
+/release check
+/release notes
+```
+
+`/release check` runs only validation commands allowed by the release policy.

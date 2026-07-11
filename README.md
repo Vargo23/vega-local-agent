@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v1.11.0
+v1.12.0
 
 ## Features
 
@@ -28,6 +28,7 @@ v1.11.0
 * Controlled Internet Layer with explicit session-level enablement and safe HTTPS fetching
 * Documentation Builder with policy validation, managed documents, and pending patch generation
 * Process-local Agent Modes for architecture, coding, review, debugging, teaching, and release management
+* Read-only Release Manager with policy validation, release checks, and release-notes generation
 
 ## Requirements
 
@@ -126,6 +127,10 @@ python scripts\vega.py
 /docgen status
 /docgen check
 /docgen build
+/release
+/release status
+/release check
+/release notes
 /exit
 /bye
 /q
@@ -562,3 +567,18 @@ Next planned stage:
 ```text
 v2.0.0 - Agent Orchestration Foundation.
 ```
+
+## VEGA v1.12.0 - Release Manager
+
+VEGA includes a read-only Release Manager for checking whether the project is ready for release.
+
+```text
+/release
+/release status
+/release check
+/release notes
+```
+
+Release Manager validates the configured branch policy, Git working-tree state, required project files, documentation, identity checks, compilation, and tests.
+
+It does not commit, tag, push, or publish GitHub releases automatically.

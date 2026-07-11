@@ -27,6 +27,12 @@ from tools.patch_tools import (
     show_patch,
 )
 
+from tools.release_tools import (
+    build_release_notes,
+    get_release_status,
+    load_release_policy,
+    run_release_check,
+)
 
 FILE_HELP = """File commands (safe read-only access):
   /file list <path>       List a project directory
@@ -119,6 +125,16 @@ DOCGEN_HELP = """Documentation Builder commands:
   /docgen build    Create pending patches for managed documentation
 
 Documentation Builder does not apply documentation changes automatically."""
+
+RELEASE_HELP = """Release Manager commands:
+  /release          Show Release Manager help
+  /release status   Show release readiness without running commands
+  /release check    Run configured release validation commands
+  /release notes    Build an in-memory release notes draft
+
+Release Manager is read-only.
+It cannot commit, tag, push, or publish a GitHub release."""
+
 
 MODE_HELP = """Agent Mode commands:
   /mode                  Show the active mode
@@ -779,6 +795,131 @@ def handle_docgen_command(
 
     return DOCGEN_HELP
 
+
+
+def handle_release_command(
+    command: str,
+    project_root=None,
+) -> str:
+    """Handle read-only Release Manager commands."""
+
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Release command error: {exc}"
+
+    parts = [_clean_cli_token(part) for part in parts]
+
+    if len(parts) == 1:
+        return RELEASE_HELP
+
+    action = parts[1].lower()
+
+    if action == "status" and len(parts) == 2:
+        result = get_release_status(project_root)
+
+        if not result["ok"]:
+            return f"Release command error: {result['error']}"
+
+        data = result["data"]
+        lines = [
+            "Release status",
+            f"Version: {data['version']}",
+            f"Version valid: {'YES' if data['version_valid'] else 'NO'}",
+            f"Branch: {data['branch']}",
+            f"Branch allowed: {'YES' if data['branch_allowed'] else 'NO'}",
+            f"Publish branch: {data['publish_branch']}",
+            (
+                "Publish branch match: "
+                f"{'YES' if data['publish_branch_match'] else 'NO'}"
+            ),
+            f"Git clean: {'YES' if data['git_clean'] else 'NO'}",
+            (
+                "Documentation: "
+                f"{'PASS' if data['documentation_passed'] else 'FAIL'}"
+            ),
+            (
+                "Preparation ready: "
+                f"{'YES' if data['preparation_ready'] else 'NO'}"
+            ),
+            (
+                "Publish ready: "
+                f"{'YES' if data['publish_ready'] else 'NO'}"
+            ),
+        ]
+
+        if data["missing_files"]:
+            lines.extend(["", "Missing files:"])
+            for item in data["missing_files"]:
+                lines.append(f"  - {item}")
+
+        if data["issues"]:
+            lines.extend(["", "Issues:"])
+            for issue in data["issues"]:
+                lines.append(f"  - {issue}")
+
+        return "\n".join(lines)
+
+    if action == "check" and len(parts) == 2:
+        result = run_release_check(project_root)
+
+        if not result["ok"]:
+            return f"Release command error: {result['error']}"
+
+        data = result["data"]
+        status = data["status"]
+
+        lines = [
+            "Release check",
+            f"Version: {status['version']}",
+            f"Branch: {status['branch']}",
+            f"Commands passed: {'YES' if data['commands_passed'] else 'NO'}",
+            f"Release check: {'PASS' if data['passed'] else 'FAIL'}",
+            f"Publish ready: {'YES' if data['publish_ready'] else 'NO'}",
+            "",
+            "Validation commands:",
+        ]
+
+        for item in data["commands"]:
+            lines.append(
+                "  "
+                f"[{'PASS' if item['passed'] else 'FAIL'}] "
+                f"{item['command_id']} "
+                f"(returncode={item['returncode']}, "
+                f"duration_ms={item['duration_ms']})"
+            )
+
+            if item["error"]:
+                lines.append(f"    Error: {item['error']}")
+
+        if status["issues"]:
+            lines.extend(["", "Status issues:"])
+            for issue in status["issues"]:
+                lines.append(f"  - {issue}")
+
+        return "\n".join(lines)
+
+    if action == "notes" and len(parts) == 2:
+        result = build_release_notes(project_root)
+
+        if not result["ok"]:
+            return f"Release command error: {result['error']}"
+
+        data = result["data"]
+
+        return "\n".join(
+            [
+                "Release notes draft",
+                f"Version: {data['version']}",
+                f"Source: {data['source']}",
+                f"Suggested path: {data['suggested_path']}",
+                "Written: NO",
+                "",
+                data["draft"],
+            ]
+        )
+
+    return RELEASE_HELP
 
 
 def handle_mode_command(command: str, mode_session) -> str:

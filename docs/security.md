@@ -92,7 +92,7 @@ enforcement.
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v1.11.0`
+Project version: `v1.12.0`
 
 ### Documentation Builder policy
 
@@ -111,6 +111,7 @@ Project version: `v1.11.0`
 - `config/allowed_commands.json`
 - `config/internet_policy.json`
 - `config/documentation_policy.json`
+- `config/release_policy.json`
 
 ### Enforcement principles
 
@@ -120,3 +121,13 @@ Project version: `v1.11.0`
 4. Pending patches are never applied by `/docgen build`.
 5. Patch application requires a separate explicit command.
 <!-- VEGA DOCGEN END: security -->
+
+## Release Manager security
+
+* Release Manager is read-only.
+* Automatic commits are disabled.
+* Automatic tags are disabled.
+* Automatic pushes are disabled.
+* Automatic GitHub releases are disabled.
+* Validation commands must be predefined.
+* Release paths cannot escape the project root.

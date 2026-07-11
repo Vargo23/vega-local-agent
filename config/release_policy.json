@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "required_files": [
+    "README.md",
+    "CHANGELOG.md",
+    "scripts/version.py",
+    "docs/architecture.md",
+    "docs/commands.md",
+    "docs/security.md",
+    "config/release_policy.json"
+  ],
+  "branch_policy": {
+    "allowed_check_branches": [
+      "main"
+    ],
+    "allowed_check_prefixes": [
+      "feature/v",
+      "release/"
+    ],
+    "publish_branch": "main"
+  },
+  "checks": {
+    "documentation": true,
+    "commands": [
+      "identity",
+      "compile",
+      "tests"
+    ]
+  },
+  "notes": {
+    "source": "CHANGELOG.md",
+    "output_dir": "docs/releases",
+    "max_chars": 20000
+  },
+  "publishing": {
+    "allow_commit": false,
+    "allow_tag": false,
+    "allow_push": false,
+    "allow_github_release": false
+  }
+}
