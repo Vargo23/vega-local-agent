@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v2.3.0 - Controlled Test-Fix Loop
+v2.4.0 - Controlled Review Pipeline
 
 ## Features
 
@@ -560,13 +560,13 @@ The predefined test group is:
 Current stable checkpoint:
 
 ```text
-v2.3.0 - Controlled Test-Fix Loop
+v2.4.0 - Controlled Review Pipeline
 ```
 
 Next planned stage:
 
 ```text
-To be determined.
+v2.5.0 - Checkpoints and Recovery.
 ```
 
 ## VEGA v1.12.0 - Release Manager
@@ -671,3 +671,23 @@ next fixing patch, run an infinite autonomous loop, or automatically roll back a
 applied patch. A workflow permits at most three patch iterations. If verification
 still fails after the limit is reached, the workflow stops fail-closed and requires
 manual intervention.
+
+## VEGA v2.4.0 - Controlled Review Pipeline
+
+After each successful verification, VEGA runs a bounded, read-only review of only
+the patches and files recorded by the active workflow:
+
+```text
+patch -> confirmation -> apply -> verification -> review -> completed
+```
+
+Critical and high findings are blocking. Info, low, and medium findings are kept
+in the review report but do not prevent completion. Blocking findings return the
+workflow to `waiting_patch` with reason `review_findings`; the user must supply a
+real pending Patch Tools artifact, confirm it separately, and pass verification
+before another review runs. Review fixes share the existing three-patch limit.
+
+`/workflow review` shows the latest structured report. Resume reuses persisted
+verification and review evidence instead of applying patches or invoking Reviewer
+again. Reviewer has no Patch Tools, shell, or file-writing capability, and invalid
+or unavailable provider output fails closed.

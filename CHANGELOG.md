@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.4.0 - Controlled Review Pipeline
+
+Added:
+
+* Read-only review after every successful workflow verification.
+* Strictly validated findings with severity, category, evidence, recommendation,
+  and blocking status.
+* Safe review policy with critical and high findings always blocking.
+* Persistent review history and `/workflow review` reporting.
+* Review state and explicit `review_findings` patch-request reason.
+
+Changed:
+
+* Blocking review findings continue through the existing patch, confirmation,
+  verification, and review path.
+* Every review-fix patch requires its own explicit confirmation and consumes the
+  existing three-iteration patch limit.
+* Resume restores saved review outcomes without invoking Reviewer again.
+* Current version updated to v2.4.0.
+
+Security:
+
+* Reviewer receives only bounded workflow evidence and no Patch Tools, Tool
+  Executor, shell access, rollback, or file-writing capability.
+* Invalid JSON, invalid findings, provider failures, and blocking findings at the
+  patch limit fail closed.
+* Review Pipeline never changes files automatically and never reviews unrelated
+  working-tree changes.
+
 ## v2.3.0 - Controlled Test-Fix Loop
 
 Added:
