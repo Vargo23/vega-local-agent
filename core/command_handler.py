@@ -134,7 +134,10 @@ WORKFLOW_HELP = """Coding Workflow commands:
   /workflow resume
   /workflow confirm
   /workflow cancel
-  /workflow history"""
+  /workflow history
+  /workflow recovery-status [workflow_id]
+  /workflow checkpoints [workflow_id]
+  /workflow recover <checkpoint_id> CONFIRM"""
 
 
 def handle_workflow_command(
@@ -144,13 +147,76 @@ def handle_workflow_command(
     confirmation_manager=None,
     engine=None,
     execution_context=None,
+    recovery_manager=None,
 ) -> str:
     """Execute one deterministic coding-workflow command."""
     from pathlib import Path
 
-    from workflows import WorkflowEngine, default_registry
+    from workflows import WorkflowEngine, WorkflowRecoveryManager, default_registry
+    from workflows.checkpoint_store import CheckpointStorageError
     from workflows.models import WorkflowError
+    from workflows.models import validate_workflow_id
     from workflows.project_context import ProjectContextAdapter
+    from workflows.recovery_manager import (
+        RecoveryConflictError,
+        RecoveryConfirmationError,
+        RecoveryError,
+        RecoveryNotAvailableError,
+        RecoveryStorageError,
+    )
+    from workflows.recovery_models import RecoveryValidationError
+
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Workflow command error: {exc}"
+    if len(parts) == 1:
+        return WORKFLOW_HELP
+    parts = [_clean_cli_token(part) for part in parts]
+    action = parts[1].lower()
+
+    if action in {"recovery-status", "checkpoints", "recover"}:
+        root = Path(project_root) if project_root is not None else Path.cwd()
+        try:
+            manager = recovery_manager or WorkflowRecoveryManager(root)
+            if action == "recovery-status":
+                if len(parts) not in {2, 3}:
+                    return "Workflow command error: Usage: /workflow recovery-status [workflow_id]"
+                workflow_id = parts[2] if len(parts) == 3 else None
+                if workflow_id is not None:
+                    validate_workflow_id(workflow_id)
+                return _recovery_diagnosis_text(manager.diagnose(workflow_id))
+            if action == "checkpoints":
+                if len(parts) not in {2, 3}:
+                    return "Workflow command error: Usage: /workflow checkpoints [workflow_id]"
+                workflow_id = parts[2] if len(parts) == 3 else None
+                if workflow_id is not None:
+                    validate_workflow_id(workflow_id)
+                checkpoints = manager._active_checkpoints()
+                if workflow_id is not None:
+                    checkpoints = [item for item in checkpoints if item.workflow_id == workflow_id]
+                return _active_checkpoints_text(checkpoints)
+            if len(parts) != 4:
+                return "Workflow command error: Usage: /workflow recover <checkpoint_id> CONFIRM"
+            if parts[3] != "CONFIRM":
+                return "Workflow confirmation error: The exact confirmation token CONFIRM is required."
+            return _recovery_result_text(manager.recover(parts[2], parts[3]))
+        except RecoveryNotAvailableError as exc:
+            return f"Workflow recovery unavailable: {exc}"
+        except RecoveryConflictError as exc:
+            return f"Workflow recovery conflict: {exc}"
+        except RecoveryConfirmationError as exc:
+            return f"Workflow confirmation error: {exc}"
+        except (RecoveryStorageError, CheckpointStorageError) as exc:
+            return f"Workflow recovery storage error: {exc}"
+        except RecoveryValidationError as exc:
+            return f"Workflow recovery validation error: {exc}"
+        except RecoveryError as exc:
+            return f"Workflow recovery error: {exc}"
+        except ValueError as exc:
+            return f"Workflow recovery validation error: {exc}"
+        except Exception:
+            return "Workflow internal error: recovery command failed safely."
 
     if engine is None:
         engine = WorkflowEngine(
@@ -162,14 +228,6 @@ def handle_workflow_command(
                 execution_context,
             ),
         )
-
-    try:
-        parts = shlex.split(command, posix=False)
-    except ValueError as exc:
-        return f"Workflow command error: {exc}"
-    if len(parts) == 1:
-        return WORKFLOW_HELP
-    action = parts[1].lower()
     try:
         if action == "list" and len(parts) == 2:
             return "Available workflows:\n" + "\n".join(f"  {name}" for name in engine.list_workflows())
@@ -218,6 +276,70 @@ def handle_workflow_command(
     except (WorkflowError, TypeError, ValueError) as exc:
         return f"Workflow error: {exc}"
     return WORKFLOW_HELP
+
+
+def _recovery_diagnosis_text(diagnosis) -> str:
+    value = lambda item: "none" if item is None else item.value if hasattr(item, "value") else str(item)
+    lines = [
+        "Workflow recovery diagnosis:",
+        f"  State: {value(diagnosis.state)}",
+        f"  Workflow ID: {value(diagnosis.workflow_id)}",
+        f"  Active-state filename: {value(diagnosis.active_state_filename)}",
+        f"  Active state valid: {str(diagnosis.active_state_valid).lower()}",
+        f"  Recovery available: {str(diagnosis.recoverable).lower()}",
+        f"  Checkpoint ID: {value(diagnosis.checkpoint_id)}",
+        f"  Checkpoint sequence: {value(diagnosis.checkpoint_sequence)}",
+        f"  Checkpoint reason: {value(diagnosis.checkpoint_reason)}",
+        f"  Checkpoint status: {value(diagnosis.checkpoint_status)}",
+        f"  Explicit confirmation required: {str(diagnosis.requires_confirmation).lower()}",
+    ]
+    lines.extend(f"  Warning: {warning}" for warning in diagnosis.warnings)
+    if diagnosis.recoverable and diagnosis.checkpoint_id:
+        lines.append(f"Run /workflow recover {diagnosis.checkpoint_id} CONFIRM")
+    elif value(diagnosis.state) == "healthy":
+        lines.append("Recovery is not required.")
+    elif value(diagnosis.state) in {"multiple_active_states", "multiple_checkpoint_workflows"}:
+        lines.append("Automatic selection was refused because the recovery state is ambiguous.")
+    return "\n".join(lines)
+
+
+def _active_checkpoints_text(checkpoints) -> str:
+    ordered = sorted(checkpoints, key=lambda item: (item.workflow_id, item.sequence, item.checkpoint_id))
+    if not ordered:
+        return "No active workflow checkpoints."
+    lines = ["Active workflow checkpoints:"]
+    current = None
+    for checkpoint in ordered:
+        if checkpoint.workflow_id != current:
+            current = checkpoint.workflow_id
+            lines.append(f"Workflow {current}:")
+        patch_ids = ", ".join(checkpoint.patch_ids) if checkpoint.patch_ids else "none"
+        lines.append(
+            f"  {checkpoint.checkpoint_id} | sequence {checkpoint.sequence} | "
+            f"reason {checkpoint.reason.value} | status {checkpoint.workflow_status.value} | "
+            f"created {checkpoint.created_at} | patch IDs {patch_ids}"
+        )
+    return "\n".join(lines)
+
+
+def _recovery_result_text(result) -> str:
+    lines = [
+        "Workflow state recovery:",
+        f"  Workflow ID: {result.workflow_id}",
+        f"  Checkpoint ID: {result.checkpoint_id}",
+        f"  Restored status: {result.restored_status.value}",
+        f"  Active-state filename: {result.active_state_filename}",
+        f"  Quarantine filename: {result.quarantine_filename or 'none'}",
+        f"  Recovered: {str(result.recovered).lower()}",
+        f"  Already recovered: {str(result.already_recovered).lower()}",
+        f"  Resume required: {str(result.requires_resume).lower()}",
+    ]
+    lines.extend(f"  Warning: {warning}" for warning in result.warnings)
+    lines.extend([
+        "State restoration is complete. Workflow execution has not resumed.",
+        f"Run /workflow resume separately after reviewing the restored state (workflow {result.workflow_id}).",
+    ])
+    return "\n".join(lines)
 
 
 def _workflow_text(run) -> str:
