@@ -60,6 +60,15 @@ class PermissionEvaluator:
     def accepts_confirmation(self, token: object) -> bool:
         return token == self._policy.confirmation_token
 
+    def allows_session_grant(self, decision: PermissionDecision) -> bool:
+        """Return whether this current confirm decision permits session scope."""
+        return (
+            isinstance(decision, PermissionDecision)
+            and decision.confirmation_required
+            and decision.rule is not None
+            and decision.rule.session_grant_allowed
+        )
+
     @property
     def confirmation_token(self) -> str:
         """Return the token already validated by PermissionPolicy."""

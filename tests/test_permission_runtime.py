@@ -6,6 +6,7 @@ from core.tool_executor_factory import build_production_tool_executor
 from permissions import PermissionEffect, PermissionPolicyError, PermissionRisk
 from permissions.policy import load_permission_policy
 from tools.registry import TOOL_REGISTRY
+from permissions import SessionGrantStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -23,6 +24,11 @@ class PermissionRuntimeTests(unittest.TestCase):
         ):
             with self.assertRaises(PermissionPolicyError):
                 build_production_tool_executor()
+
+    def test_builder_preserves_exact_supplied_session_store(self):
+        store = SessionGrantStore()
+        executor = build_production_tool_executor(store)
+        self.assertIs(executor._session_grants, store)
 
     def test_critical_and_execution_network_rules_have_no_session_authorization(self):
         rules = {rule.tool_name: rule for rule in load_permission_policy(ROOT).rules}

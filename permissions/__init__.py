@@ -14,6 +14,7 @@ from permissions.models import (
     PermissionValidationError,
 )
 from permissions.policy import load_permission_policy, validate_policy_registry_alignment
+from permissions.session_grants import SessionGrant, SessionGrantError, SessionGrantStore
 
 __all__ = [
     "PermissionDecision",
@@ -29,4 +30,7 @@ __all__ = [
     "PermissionValidationError",
     "load_permission_policy",
     "validate_policy_registry_alignment",
+    "SessionGrant",
+    "SessionGrantError",
+    "SessionGrantStore",
 ]

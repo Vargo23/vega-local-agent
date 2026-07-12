@@ -6,8 +6,8 @@ from core.tool_executor import ToolExecutor, ToolRequest
 from permissions import PermissionCapability, PermissionEffect, PermissionEvaluator, PermissionPolicy, PermissionRisk, PermissionRule
 
 
-def evaluator(effect, name="sample"):
-    rule = PermissionRule(name, (PermissionCapability.PROCESS_EXECUTE,), PermissionRisk.HIGH, effect, False, "Test.")
+def evaluator(effect, name="sample", session_allowed=False):
+    rule = PermissionRule(name, (PermissionCapability.PROCESS_EXECUTE,), PermissionRisk.HIGH, effect, session_allowed, "Test.")
     return PermissionEvaluator(PermissionPolicy(1, PermissionEffect.DENY, "CONFIRM", 10, (rule,)))
 
 
@@ -16,7 +16,7 @@ class ToolConfirmationTests(unittest.TestCase):
         self.prompt_request = ToolConfirmationRequest("terminal_run", "high", ("process.execute",), ("api_key",))
 
     def test_responses_are_narrow_and_fail_closed(self):
-        cases = {"y": ToolConfirmationDecision.APPROVE, "yes": ToolConfirmationDecision.APPROVE, "n": ToolConfirmationDecision.REJECT, "no": ToolConfirmationDecision.REJECT, "": ToolConfirmationDecision.REJECT, "yep": ToolConfirmationDecision.REJECT}
+        cases = {"y": ToolConfirmationDecision.APPROVE_ONCE, "yes": ToolConfirmationDecision.APPROVE_ONCE, "n": ToolConfirmationDecision.REJECT, "no": ToolConfirmationDecision.REJECT, "": ToolConfirmationDecision.REJECT, "yep": ToolConfirmationDecision.REJECT}
         for response, expected in cases.items():
             with self.subTest(response=response):
                 self.assertIs(ToolConfirmationManager(lambda prompt, value=response: value).decide(self.prompt_request), expected)
@@ -68,6 +68,55 @@ class ToolConfirmationTests(unittest.TestCase):
             result = ToolExecutor({"sample": lambda: calls.append(True)}, configured)._execute_confirmed_once(ToolRequest("sample"))
             self.assertFalse(result.ok)
             self.assertEqual(calls, [])
+
+    def test_structured_session_decision_is_rejected_when_restricted(self):
+        request = ToolConfirmationRequest(
+            "terminal_run",
+            "high",
+            session_allowed=False,
+        )
+        manager = ToolConfirmationManager(
+            lambda prompt: ToolConfirmationDecision.APPROVE_SESSION
+        )
+        self.assertIs(manager.decide(request), ToolConfirmationDecision.REJECT)
+
+    def test_restricted_session_strings_never_execute(self):
+        for response in ("s", "session"):
+            calls = []
+            executor = ToolExecutor(
+                {"terminal_run": lambda: calls.append(True)},
+                evaluator(PermissionEffect.CONFIRM, "terminal_run"),
+            )
+            result = execute_tool_with_confirmation(
+                executor,
+                ToolRequest("terminal_run"),
+                ToolConfirmationManager(lambda prompt, value=response: value),
+            )
+            with self.subTest(response=response):
+                self.assertEqual(result.error_code, "confirmation_rejected")
+                self.assertEqual(calls, [])
+
+    def test_failed_session_activation_preserves_permission_metadata(self):
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator(PermissionEffect.CONFIRM, session_allowed=True),
+        )
+        with patch.object(
+            executor,
+            "grant_session_for_tool",
+            side_effect=RuntimeError("failed"),
+        ):
+            result = execute_tool_with_confirmation(
+                executor,
+                ToolRequest("sample"),
+                ToolConfirmationManager(lambda prompt: "session"),
+            )
+        self.assertEqual(result.error_code, "permission_policy_error")
+        self.assertEqual(result.permission_risk, "high")
+        self.assertEqual(result.permission_capabilities, ("process.execute",))
+        self.assertTrue(result.permission_session_allowed)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

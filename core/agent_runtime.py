@@ -20,6 +20,7 @@ from core.command_executor import (
     CommandExecutor,
 )
 from core.tool_confirmation import ToolConfirmationManager
+from permissions.session_grants import SessionGrantStore
 from core.command_router import CommandTarget
 from core.execution_context import ExecutionContext
 from core.ollama_client import (
@@ -31,7 +32,7 @@ from core.orchestrator import (
     OrchestrationKind,
 )
 from core.tool_executor import ToolExecutor
-from core.tool_executor_factory import build_production_tool_executor
+from core.tool_executor_factory import build_production_session_grants, build_production_tool_executor
 
 DEFAULT_MODEL = "vega-core"
 INTERNET = "OFF"
@@ -198,6 +199,9 @@ def help_text() -> str:
         "  /release notes          Build release notes draft.",
         "  /workflow              Show Coding Workflow help.",
         "  /workflow start ...    Start feature, bugfix, or refactor workflow.",
+        "  /permissions grants    List active permission session grants.",
+        "  /permissions revoke    Revoke one permission session grant.",
+        "  /permissions clear     Clear permission session grants.",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -784,6 +788,7 @@ def handle_command(
     mode_session=None,
     tool_executor: ToolExecutor | None = None,
     tool_confirmation_manager: ToolConfirmationManager | None = None,
+    session_grants: SessionGrantStore | None = None,
 ) -> bool:
     command = command.strip()
     lower = command.lower()
@@ -904,6 +909,12 @@ def handle_command(
         from core.command_handler import handle_workflow_command
 
         print(handle_workflow_command(command, root))
+    elif lower == "/permissions" or lower.startswith("/permissions "):
+        from core.command_handler import handle_permissions_command
+        if session_grants is None:
+            print("Permissions command error: session grants are unavailable.")
+        else:
+            print(handle_permissions_command(command, session_grants))
     elif lower in {"/exit", "/bye", "/q"}:
         print("Bye.")
         append_log(log_file, "SYSTEM", "Session closed by user.")
@@ -969,6 +980,7 @@ def build_command_executor(
     *,
     tool_executor: ToolExecutor | None = None,
     tool_confirmation_manager: ToolConfirmationManager | None = None,
+    session_grants: SessionGrantStore | None = None,
 ) -> CommandExecutor:
     """Create compatibility handlers for routed runtime commands."""
     if not isinstance(context, ExecutionContext):
@@ -989,6 +1001,8 @@ def build_command_executor(
         arguments = {"tool_executor": tool_executor}
         if tool_confirmation_manager is not None:
             arguments["tool_confirmation_manager"] = tool_confirmation_manager
+        if session_grants is not None:
+            arguments["session_grants"] = session_grants
         return handle_command(
             request.route.normalized_command,
             context.project_root,
@@ -1075,12 +1089,14 @@ def main() -> int:
         mode_session=mode_session,
     )
     context = orchestrator.context
-    tool_executor = build_production_tool_executor()
+    session_grants = build_production_session_grants()
+    tool_executor = build_production_tool_executor(session_grants)
     tool_confirmation_manager = ToolConfirmationManager(input)
     command_executor = build_command_executor(
         context,
         tool_executor=tool_executor,
         tool_confirmation_manager=tool_confirmation_manager,
+        session_grants=session_grants,
     )
 
     from ui.startup_screen import (

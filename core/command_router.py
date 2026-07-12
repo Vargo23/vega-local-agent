@@ -38,6 +38,7 @@ class CommandTarget(str, Enum):
     DOCGEN = "docgen"
     RELEASE = "release"
     WORKFLOW = "workflow"
+    PERMISSIONS = "permissions"
     EXIT = "exit"
     UNKNOWN = "unknown"
 
@@ -89,6 +90,7 @@ _DEFAULT_ROUTES = MappingProxyType(
         "/docgen": CommandTarget.DOCGEN,
         "/release": CommandTarget.RELEASE,
         "/workflow": CommandTarget.WORKFLOW,
+        "/permissions": CommandTarget.PERMISSIONS,
         "/exit": CommandTarget.EXIT,
         "/bye": CommandTarget.EXIT,
         "/q": CommandTarget.EXIT,

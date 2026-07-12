@@ -11,6 +11,7 @@ from core.tool_confirmation import (
 )
 from core.tool_executor import ToolExecutor, ToolRequest
 from core.tool_executor_factory import build_production_tool_executor
+from permissions.session_grants import SessionGrantStore
 from tools.patch_tools import (
     apply_patch,
     list_patches,
@@ -143,6 +144,40 @@ WORKFLOW_HELP = """Coding Workflow commands:
   /workflow recovery-status [workflow_id]
   /workflow checkpoints [workflow_id]
   /workflow recover <checkpoint_id> CONFIRM"""
+
+PERMISSIONS_HELP = """Permission session grants:
+  /permissions grants
+  /permissions revoke <tool_name>
+  /permissions clear"""
+
+
+def handle_permissions_command(command: str, session_grants: SessionGrantStore) -> str:
+    if not isinstance(session_grants, SessionGrantStore):
+        raise TypeError("session_grants must be a SessionGrantStore instance")
+    try:
+        parts = shlex.split(command, posix=False)
+    except ValueError as exc:
+        return f"Permissions command error: {exc}"
+    parts = [_clean_cli_token(part) for part in parts]
+    if len(parts) == 1:
+        return PERMISSIONS_HELP
+    action = parts[1].lower()
+    if action == "grants" and len(parts) == 2:
+        grants = session_grants.list_grants()
+        if not grants:
+            return "Active session grants: none."
+        return "Active session grants:\n" + "\n".join(f"  {item.tool_name}" for item in grants)
+    if action == "revoke" and len(parts) == 3:
+        name = parts[2]
+        try:
+            revoked = session_grants.revoke(name)
+        except Exception as exc:
+            return f"Permissions command error: {exc}"
+        return (f"Session grant revoked: {name}." if revoked else f"Session grant was not active: {name}.")
+    if action == "clear" and len(parts) == 2:
+        count = session_grants.clear()
+        return f"Cleared {count} session grant(s)."
+    return PERMISSIONS_HELP
 
 
 def handle_workflow_command(

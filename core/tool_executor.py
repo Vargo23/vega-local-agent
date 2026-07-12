@@ -11,6 +11,7 @@ from typing import Any
 
 from permissions.evaluator import PermissionEvaluator
 from permissions.models import PermissionEffect
+from permissions.session_grants import SessionGrantStore
 from tools.registry import TOOL_REGISTRY
 
 
@@ -64,6 +65,7 @@ class ToolExecutionResult:
     error_code: str = ""
     permission_risk: str = ""
     permission_capabilities: tuple[str, ...] = ()
+    permission_session_allowed: bool = False
 
     @property
     def ok(self) -> bool:
@@ -78,6 +80,7 @@ class ToolExecutor:
         self,
         registry: Mapping[str, Callable[..., Any]] | None = None,
         permission_evaluator: PermissionEvaluator | None = None,
+        session_grants: SessionGrantStore | None = None,
     ) -> None:
         configured_registry = (
             TOOL_REGISTRY if registry is None else registry
@@ -118,6 +121,9 @@ class ToolExecutor:
                 "permission_evaluator must be a PermissionEvaluator instance."
             )
         self._permission_evaluator = permission_evaluator
+        if session_grants is not None and not isinstance(session_grants, SessionGrantStore):
+            raise TypeError("session_grants must be a SessionGrantStore instance.")
+        self._session_grants = session_grants
 
     def registered_tools(self) -> tuple[str, ...]:
         """Return registered tool names in sorted order."""
@@ -191,6 +197,12 @@ class ToolExecutor:
             if decision.confirmation_required:
                 if evaluator.accepts_confirmation(request.confirmation_token):
                     return None
+                if (
+                    self._session_grants is not None
+                    and self._session_grants.contains(request.tool_name)
+                    and evaluator.allows_session_grant(decision)
+                ):
+                    return None
                 return ToolExecutionResult(
                     ToolExecutionStatus.FAILED,
                     request.tool_name,
@@ -200,6 +212,7 @@ class ToolExecutor:
                     permission_capabilities=tuple(
                         item.value for item in decision.rule.capabilities
                     ),
+                    permission_session_allowed=evaluator.allows_session_grant(decision),
                 )
             if decision.effect is PermissionEffect.DENY and not decision.error_code:
                 return ToolExecutionResult(
@@ -260,3 +273,19 @@ class ToolExecutor:
             confirmation_token=evaluator.confirmation_token,
         )
         return self.execute(confirmed)
+
+    def grant_session_for_tool(self, tool_name: str) -> None:
+        """Grant one registered tool only after current policy validation."""
+        if not isinstance(tool_name, str):
+            raise TypeError("tool_name must be a string.")
+        normalized_name = tool_name.strip()
+        if not normalized_name:
+            raise ValueError("tool_name must not be empty.")
+        if normalized_name not in self._registry:
+            raise ValueError(f"Unknown tool: {normalized_name}.")
+        if self._permission_evaluator is None or self._session_grants is None:
+            raise RuntimeError("session grants are unavailable")
+        decision = self._permission_evaluator.evaluate(normalized_name)
+        if not self._permission_evaluator.allows_session_grant(decision):
+            raise RuntimeError("session grant is not permitted by policy")
+        self._session_grants.grant(normalized_name)
