@@ -148,3 +148,40 @@ Project version: `v2.1.0`
 * `ToolExecutor` is connected only to `/file`, `/git`, and `/tools list`.
 * Automatic model-driven tool calling and autonomous execution loops remain disabled.
 * Existing write, terminal, test, internet, web, patch, and confirmation paths retain their established policies.
+
+## Tool permissions
+
+VEGA v2.6 enforces permission effects `allow`, `confirm`, and `deny`; risk labels are `low`,
+`medium`, `high`, and `critical`. `allow` executes normally, `confirm` requires
+explicit approval, and `deny` never executes. Missing rules and evaluator errors
+fail closed. Unknown registry names still report `unknown_tool`, and confirmation
+metadata is never passed to tool callables.
+
+The current production policy explicitly allows:
+
+* `documentation_check`, `documentation_policy_load`, `documentation_status`;
+* `find_file`, `list_dir`, `read_file`, `search_in_files`, `summarize_file`;
+* `git_branch`, `git_diff`, `git_diff_cached`, `git_log`, `git_status`;
+* `internet_status`, `list_patches`, `memory_list`, `memory_search`,
+  `memory_stats`, `release_notes`, `release_policy_load`, `release_status`,
+  `show_patch`, `terminal_list`, and `test_list`.
+
+The current production policy requires confirmation for `apply_patch`,
+`documentation_build`, `internet_set`, `memory_add`, `propose_patch`,
+`propose_patch_from_file`, `release_check`, `rollback_patch`, `terminal_run`,
+`test_run`, and `web_fetch`. There are no explicit production `deny` rules;
+unclassified tools are denied by the fail-closed default.
+
+Session approval is available only for `memory_add`, `propose_patch`, and
+`propose_patch_from_file`. It is explicitly unavailable for `apply_patch`,
+`documentation_build`, `internet_set`, `release_check`, `rollback_patch`,
+`terminal_run`, `test_run`, and `web_fetch`.
+
+Session grants live only in memory for the current VEGA process, start empty, and
+apply to one exact tool. They are never persisted or stored in checkpoints,
+workflows, project memory, configuration, or logs. They cannot cross processes,
+and production policy is rechecked before every use.
+
+One-time input `y` or `yes` approves once. `n` or `no`, empty and unknown input,
+EOF, `KeyboardInterrupt`, callback errors, and unavailable interactive input all
+fail closed. The internal confirmation token is not shown to the user.

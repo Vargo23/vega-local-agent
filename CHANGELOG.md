@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.6.0 - Permissions System
+
+Added:
+
+* Immutable permission models and the `allow`, `confirm`, and `deny` vocabulary
+  across `low`, `medium`, `high`, and `critical` risk levels.
+* Fail-closed production policy loading with exact registry-policy alignment.
+* `PermissionEvaluator` enforcement in `ToolExecutor` and machine-readable
+  permission error codes.
+* One-time interactive approval and in-memory, exact-tool session grants where
+  the production policy explicitly permits session scope.
+* `/permissions`, `/permissions grants`, `/permissions revoke <tool_name>`, and
+  `/permissions clear` lifecycle commands.
+* A production executor factory that shares one process-local grant store between
+  tool execution and permission commands.
+
+Changed:
+
+* All production tools are classified and enforced before argument validation and
+  callable execution.
+* Runtime, CLI identity, and release-check version updated to v2.6.0.
+
+Security:
+
+* Missing rules, policy/evaluator failures, invalid confirmation input, callback
+  errors, and non-interactive confirmation-required actions fail closed.
+* Session grants are never persisted or restored and cannot be created by a
+  direct grant command.
+* Workflow confirmation and interactive tool confirmation remain separate.
+
 ## v2.5.0 - Workflow Checkpoints and Safe Recovery
 
 Added:

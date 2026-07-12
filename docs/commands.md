@@ -221,3 +221,24 @@ Start analyzes and plans the task without writes, persists the draft, and stops 
 `waiting_patch`. `attach-patch` validates a pending artifact and stops at
 `waiting_confirmation`. Only `/workflow confirm` applies it. `link-task` is the
 only workflow command allowed to copy the workflow plan into an existing task.
+
+## v2.6 permission commands
+
+```text
+/permissions
+/permissions grants
+/permissions revoke <tool_name>
+/permissions clear
+```
+
+`/permissions` shows help, `grants` lists active process-local grants, `revoke`
+removes the grant for one exact tool, and `clear` removes every active grant.
+There is no `/permissions grant <tool_name>` command. A session grant can only
+originate from a real confirmation-required tool invocation and an explicit
+session approval when production policy permits it.
+
+For one-time prompts, `y` and `yes` approve the current invocation; `n`, `no`,
+empty or unknown input, EOF, `KeyboardInterrupt`, and callback errors reject or
+cancel it. Non-interactive confirmation-required commands remain blocked. The
+internal confirmation token is not displayed, and confirmation metadata is not
+passed to tool callables.

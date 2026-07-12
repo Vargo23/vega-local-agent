@@ -1,3 +1,3 @@
-VERSION = "v2.5.0"
+VERSION = "v2.6.0"
 APP_NAME = "VEGA"
 APP_SUBTITLE = "Local Project Coding-Agent"

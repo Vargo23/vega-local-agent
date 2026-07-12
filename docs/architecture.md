@@ -277,3 +277,33 @@ plan from workflow type, task text, and project context.
 Every run persists structured `WorkflowStep` records and artifacts. Production
 Patch and Test adapters fail closed. Recovery inspects persisted step results and
 Patch Tools state so an applied patch is never applied twice.
+
+## Permissions System
+
+The v2.6 production execution flow is:
+
+```text
+CLI or runtime request
+    -> ToolRequest
+    -> ToolExecutor
+    -> PermissionEvaluator
+    -> allow / confirm / deny
+    -> optional one-time confirmation or active session grant
+    -> argument validation
+    -> callable execution
+    -> ToolExecutionResult
+```
+
+Production construction uses the fixed `TOOL_REGISTRY`, the fixed production
+permission policy, and exact registry-policy alignment. One `SessionGrantStore`
+is created for each VEGA process and the same store is shared by `ToolExecutor`
+and `/permissions` commands.
+
+`ToolExecutor(custom_registry)` without an evaluator retains isolated legacy
+behavior. Partial test registries do not automatically load the production
+policy. Background and non-interactive execution remain fail closed whenever a
+production rule requires confirmation.
+
+`core/confirmation_manager.py` owns workflow/orchestrator confirmation state.
+`core/tool_confirmation.py` independently owns interactive tool-permission
+confirmation; neither system substitutes for or grants state to the other.

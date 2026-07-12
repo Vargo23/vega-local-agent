@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v2.5.0 - Workflow Checkpoints and Safe Recovery
+v2.6.0 - Permissions System
 
 ## Features
 
@@ -33,6 +33,7 @@ v2.5.0 - Workflow Checkpoints and Safe Recovery
 * Structured Command Execution with typed requests, results, and statuses
 * Controlled Tool Orchestration for the read-only `/file`, `/git`, and `/tools list` commands
 * Immutable workflow checkpoints with explicit, state-only recovery
+* Fail-closed, policy-enforced tool permissions with one-time and process-local session approval
 
 ## Requirements
 
@@ -561,7 +562,7 @@ The predefined test group is:
 Current stable checkpoint:
 
 ```text
-v2.5.0 - Workflow Checkpoints and Safe Recovery
+v2.6.0 - Permissions System
 ```
 
 Next planned stage:
@@ -731,3 +732,32 @@ recoverable, and an older checkpoint cannot be selected manually. Checkpoint and
 workflow archival are separate filesystem operations rather than one multi-file
 database transaction. Recovery never continues execution automatically, and the
 exact uppercase token `CONFIRM` is mandatory.
+
+## VEGA v2.6.0 - Permissions System
+
+Every production tool passes through a fixed, exactly aligned permission policy
+before argument validation and callable execution. Permission effects are
+`allow`, `confirm`, and `deny`; risk levels are `low`, `medium`, `high`, and
+`critical`. Allowed tools execute normally, confirmation-required tools need an
+explicit approval, and denied or unclassified tools never execute. Missing rules
+and evaluator failures fail closed, while unregistered names retain the
+`unknown_tool` result.
+
+Interactive confirmation accepts `y` or `yes` for one invocation. Eligible tools
+also offer a process-local `session` grant. Session grants start empty, apply to
+one exact tool, are never persisted, and can only arise from an actual
+confirmation-required invocation when the production policy permits session
+scope. Empty or unknown input, `n`/`no`, EOF, interruption, callback failure, and
+non-interactive execution all reject the action. Internal confirmation metadata
+is never exposed to users or passed to tool callables.
+
+```text
+/permissions
+/permissions grants
+/permissions revoke <tool_name>
+/permissions clear
+```
+
+There is no `/permissions grant <tool_name>` command. Workflow confirmation in
+`core/confirmation_manager.py` remains separate from interactive tool-permission
+confirmation in `core/tool_confirmation.py`.

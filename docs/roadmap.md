@@ -107,3 +107,19 @@ Implemented scope:
 * Deterministic `/workflow` command routing.
 
 Next stage: `v2.3.0 — Controlled Test–Fix Loop`.
+
+## v2.6.0 release status
+
+Status: `release prepared`
+
+Completed scope:
+
+* Fail-closed production permission policy and exact registry alignment.
+* Runtime `ToolExecutor` permission enforcement.
+* One-time tool confirmation and policy-limited process-local session grants.
+* `/permissions` grant lifecycle inspection and revocation commands.
+
+## v2.7.0 planned scope
+
+Model-driven and context-aware tool selection is planned for v2.7. It is not
+part of v2.6 and no v2.7 functionality is claimed by this release.
