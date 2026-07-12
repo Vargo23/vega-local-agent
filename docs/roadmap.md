@@ -79,3 +79,9 @@
 Не добавлять красивый интерфейс раньше стабильной логики агента.
 
 Сначала процесс. Потом инструменты. Потом внешний вид.
+
+## v2.0.0 release status
+
+Status: `completed`
+
+Next stage: `v2.1.0 - Structured command execution and controlled tool orchestration.`

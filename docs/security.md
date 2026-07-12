@@ -92,7 +92,7 @@ enforcement.
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v1.12.0`
+Project version: `v2.0.0`
 
 ### Documentation Builder policy
 
@@ -131,3 +131,11 @@ Project version: `v1.12.0`
 * Automatic GitHub releases are disabled.
 * Validation commands must be predefined.
 * Release paths cannot escape the project root.
+
+## Agent Orchestrator security
+
+* Input and slash-command routing are deterministic.
+* The model cannot turn ordinary chat text into a command.
+* Automatic model-driven tool execution is disabled.
+* The orchestrator grants no additional filesystem, shell, Git, or network permissions.
+* Existing workspace, terminal, internet, patch, confirmation, and Git policies remain authoritative.

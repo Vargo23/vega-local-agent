@@ -9,11 +9,11 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from version import VERSION
-from vega import load_system_prompt
+from core.agent_runtime import load_system_prompt
+from scripts.version import VERSION
 
 
 def main() -> int:

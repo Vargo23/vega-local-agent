@@ -152,7 +152,7 @@ VEGA не должна:
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v1.12.0`
+Project version: `v2.0.0`
 
 This section is generated from the current project tree.
 
@@ -219,3 +219,20 @@ scripts/vega.py
 ```
 
 It checks release state but does not commit, tag, push, or publish releases.
+
+## Agent Orchestration Foundation
+
+The v2.0 runtime has a one-way dependency flow:
+
+```text
+scripts/vega.py
+    -> core/agent_runtime.py
+        -> core/orchestrator.py
+            -> core/intent_router.py
+            -> core/command_router.py
+            -> core/execution_context.py
+            -> core/confirmation_manager.py
+        -> core/ollama_client.py
+```
+
+`scripts/vega.py` is the thin CLI entrypoint. `core/agent_runtime.py` owns the interactive session and invokes commands or Ollama after routing. `IntentRouter` classifies raw input, `CommandRouter` resolves explicit slash commands, `ExecutionContext` owns process-local session state, and `ConfirmationManager` permits at most one pending confirmation. `AgentOrchestrator` coordinates these components without executing commands or invoking the model. `ollama_client.py` contains the bounded local Ollama HTTP integration.

@@ -67,7 +67,7 @@ Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, mer
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v1.12.0`
+Project version: `v2.0.0`
 
 This section is generated from `scripts/vega.py`.
 
@@ -168,3 +168,7 @@ This section is generated from `scripts/vega.py`.
 ```
 
 `/release check` runs only validation commands allowed by the release policy.
+
+## v2.0 command routing
+
+User input is classified by `IntentRouter`. Explicit slash commands are then resolved deterministically by `CommandRouter` before the runtime invokes an existing command handler. Slash commands remain explicit user input; ordinary chat text cannot be promoted to a command by the model.

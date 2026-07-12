@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v1.12.0
+v2.0.0
 
 ## Features
 
@@ -29,6 +29,7 @@ v1.12.0
 * Documentation Builder with policy validation, managed documents, and pending patch generation
 * Process-local Agent Modes for architecture, coding, review, debugging, teaching, and release management
 * Read-only Release Manager with policy validation, release checks, and release-notes generation
+* Agent Orchestration Foundation with deterministic routing, shared session state, runtime isolation, and an extracted Ollama client
 
 ## Requirements
 
@@ -557,15 +558,14 @@ The predefined test group is:
 Current stable checkpoint:
 
 ```text
-v1.10.0 - Documentation Builder with policy validation,
-managed documentation snapshots, pending Patch Tools proposals,
-CLI integration, and isolated automated tests.
+v2.0.0 - Agent Orchestration Foundation with deterministic routing,
+shared session state, runtime isolation, and an extracted Ollama client.
 ```
 
 Next planned stage:
 
 ```text
-v2.0.0 - Agent Orchestration Foundation.
+v2.1.0 - Structured command execution and controlled tool orchestration.
 ```
 
 ## VEGA v1.12.0 - Release Manager
@@ -582,3 +582,22 @@ VEGA includes a read-only Release Manager for checking whether the project is re
 Release Manager validates the configured branch policy, Git working-tree state, required project files, documentation, identity checks, compilation, and tests.
 
 It does not commit, tag, push, or publish GitHub releases automatically.
+
+## VEGA v2.0.0 - Agent Orchestration Foundation
+
+VEGA v2.0.0 establishes the orchestration layer used by the interactive CLI:
+
+```text
+scripts/vega.py
+    -> core/agent_runtime.py
+        -> core/orchestrator.py
+            -> core/intent_router.py
+            -> core/command_router.py
+            -> core/execution_context.py
+            -> core/confirmation_manager.py
+        -> core/ollama_client.py
+```
+
+The orchestrator classifies input and routes explicit slash commands deterministically. A shared execution context owns the model, prompt, mode, confirmation state, and message history for one session. Ollama HTTP handling is isolated from the runtime.
+
+v2.0.0 does not enable automatic model-driven tool execution. Existing workspace, terminal, internet, patch, and Git safety restrictions remain active and authoritative.

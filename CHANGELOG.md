@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.0.0 - Agent Orchestration Foundation
+
+Added:
+
+* Deterministic intent classification.
+* Deterministic slash-command routing.
+* Shared execution context for one VEGA session.
+* Process-local confirmation manager.
+* Top-level agent orchestrator.
+* Isolated Ollama HTTP client.
+* Runtime and CLI entrypoint separation.
+* Unit and integration tests for the orchestration layer.
+
+Changed:
+
+* `scripts/vega.py` is now a thin CLI entrypoint.
+* Main session logic moved into `core/agent_runtime.py`.
+* User input is routed before command or chat handling.
+* Chat history is managed through `ExecutionContext`.
+* Ollama networking is isolated from the main runtime.
+* Current version updated from v1.12.0 to v2.0.0.
+
+Security:
+
+* Input and slash-command routing remain deterministic.
+* Model-driven automatic tool execution is not enabled.
+* Existing Patch Tools confirmation remains active.
+* Confirmation state is limited to one pending action per session.
+* Existing workspace, terminal, internet, patch, and Git policies remain authoritative.
+
 ## v1.12.0 - Release Manager
 
 Added:
