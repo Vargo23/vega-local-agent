@@ -84,4 +84,15 @@
 
 Status: `completed`
 
-Next stage: `v2.1.0 - Structured command execution and controlled tool orchestration.`
+## v2.1.0 release status
+
+Status: `completed`
+
+Completed scope:
+
+* `CommandExecutor` and structured command results.
+* `ToolExecutor` and controlled registered-tool invocation.
+* Runtime integration through compatibility adapters.
+* Read-only command integration for `/file`, `/git`, and `/tools list`.
+
+Next stage: `v2.2.0 — Coding Workflows`.

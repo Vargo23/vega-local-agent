@@ -67,7 +67,7 @@ Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, mer
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v2.0.0`
+Project version: `v2.1.0`
 
 This section is generated from `scripts/vega.py`.
 
@@ -172,3 +172,28 @@ This section is generated from `scripts/vega.py`.
 ## v2.0 command routing
 
 User input is classified by `IntentRouter`. Explicit slash commands are then resolved deterministically by `CommandRouter` before the runtime invokes an existing command handler. Slash commands remain explicit user input; ordinary chat text cannot be promoted to a command by the model.
+
+## v2.1 structured command execution
+
+Routed slash commands are wrapped in `CommandExecutionRequest` and executed through `CommandExecutor`. Handlers retain explicit parsing and output behavior.
+
+Read-only command-to-tool mappings are fixed in code:
+
+```text
+/file list       -> list_dir
+/file read       -> read_file
+/file find       -> find_file
+/file search     -> search_in_files
+/file summary    -> summarize_file
+/file summarize  -> summarize_file
+
+/git status         -> git_status
+/git diff           -> git_diff
+/git diff --cached  -> git_diff_cached
+/git log            -> git_log
+/git branch         -> git_branch
+
+/tools list -> ToolExecutor.registered_tools
+```
+
+There is no `/tools run` command and no user-controlled registered tool name.

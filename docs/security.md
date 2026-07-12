@@ -92,7 +92,7 @@ enforcement.
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v2.0.0`
+Project version: `v2.1.0`
 
 ### Documentation Builder policy
 
@@ -139,3 +139,12 @@ Project version: `v2.0.0`
 * Automatic model-driven tool execution is disabled.
 * The orchestrator grants no additional filesystem, shell, Git, or network permissions.
 * Existing workspace, terminal, internet, patch, confirmation, and Git policies remain authoritative.
+
+## Controlled Tool Orchestration security
+
+* Command handlers select tool names from fixed mappings; arbitrary tool names are rejected by design.
+* The model does not invoke tools and does not receive `ToolExecutor`.
+* `AgentOrchestrator` routes input but does not receive or execute tools.
+* `ToolExecutor` is connected only to `/file`, `/git`, and `/tools list`.
+* Automatic model-driven tool calling and autonomous execution loops remain disabled.
+* Existing write, terminal, test, internet, web, patch, and confirmation paths retain their established policies.

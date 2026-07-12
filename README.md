@@ -4,7 +4,7 @@ VEGA is a local project coding-agent for working with code, project structure, l
 
 ## Current version
 
-v2.0.0
+v2.1.0
 
 ## Features
 
@@ -30,6 +30,8 @@ v2.0.0
 * Process-local Agent Modes for architecture, coding, review, debugging, teaching, and release management
 * Read-only Release Manager with policy validation, release checks, and release-notes generation
 * Agent Orchestration Foundation with deterministic routing, shared session state, runtime isolation, and an extracted Ollama client
+* Structured Command Execution with typed requests, results, and statuses
+* Controlled Tool Orchestration for the read-only `/file`, `/git`, and `/tools list` commands
 
 ## Requirements
 
@@ -558,14 +560,13 @@ The predefined test group is:
 Current stable checkpoint:
 
 ```text
-v2.0.0 - Agent Orchestration Foundation with deterministic routing,
-shared session state, runtime isolation, and an extracted Ollama client.
+v2.1.0 - Structured Command Execution and Controlled Tool Orchestration.
 ```
 
 Next planned stage:
 
 ```text
-v2.1.0 - Structured command execution and controlled tool orchestration.
+v2.2.0 - Coding Workflows.
 ```
 
 ## VEGA v1.12.0 - Release Manager
@@ -601,3 +602,11 @@ scripts/vega.py
 The orchestrator classifies input and routes explicit slash commands deterministically. A shared execution context owns the model, prompt, mode, confirmation state, and message history for one session. Ollama HTTP handling is isolated from the runtime.
 
 v2.0.0 does not enable automatic model-driven tool execution. Existing workspace, terminal, internet, patch, and Git safety restrictions remain active and authoritative.
+
+## VEGA v2.1.0 - Structured Command Execution and Controlled Tool Orchestration
+
+Slash commands now move from deterministic routing through `CommandExecutionRequest` and `CommandExecutor` before reaching existing handlers. Command failures have structured statuses and are recorded as `COMMAND_ERROR` events.
+
+The read-only `/file`, `/git`, and `/tools list` command paths use one controlled `ToolExecutor` for each runtime session. Command handlers select fixed registered tool names; users cannot supply an arbitrary tool name.
+
+The model and `AgentOrchestrator` do not receive `ToolExecutor`. Automatic model-driven tool calling and autonomous execution loops are not included in v2.1.0.

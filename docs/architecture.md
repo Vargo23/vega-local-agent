@@ -152,7 +152,7 @@ VEGA не должна:
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v2.0.0`
+Project version: `v2.1.0`
 
 This section is generated from the current project tree.
 
@@ -236,3 +236,20 @@ scripts/vega.py
 ```
 
 `scripts/vega.py` is the thin CLI entrypoint. `core/agent_runtime.py` owns the interactive session and invokes commands or Ollama after routing. `IntentRouter` classifies raw input, `CommandRouter` resolves explicit slash commands, `ExecutionContext` owns process-local session state, and `ConfirmationManager` permits at most one pending confirmation. `AgentOrchestrator` coordinates these components without executing commands or invoking the model. `ollama_client.py` contains the bounded local Ollama HTTP integration.
+
+## Structured Command Execution
+
+The v2.1 read-only command flow is:
+
+```text
+AgentOrchestrator
+    -> CommandRoute
+        -> CommandExecutionRequest
+            -> CommandExecutor
+                -> command handler
+                    -> ToolExecutor
+                        -> TOOL_REGISTRY
+                            -> read-only tool
+```
+
+The runtime owns one `ToolExecutor` for the session and passes it through the command compatibility adapter. Only `/file`, `/git`, and `/tools list` use this tool-execution path. The model and orchestrator do not receive the executor.

@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.1.0 - Structured Command Execution and Controlled Tool Orchestration
+
+Added:
+
+* `CommandExecutor` for structured execution of routed slash commands.
+* `ToolExecutor` for controlled invocation of registered tools.
+* Structured command and tool request, result, and status types.
+* Runtime integration for one command executor per session.
+* Unit and integration tests for the executor layer.
+
+Changed:
+
+* Slash commands are executed through `CommandExecutor`.
+* `/file`, `/git`, and `/tools list` pass through `ToolExecutor`.
+* One `ToolExecutor` instance is reused for each runtime session.
+* `/docs` uses a dedicated compatibility adapter.
+* Command failures receive structured statuses and `COMMAND_ERROR` logging.
+
+Security:
+
+* Tool names are selected only by fixed command-handler code.
+* Users cannot invoke an arbitrary registered tool.
+* The model and `AgentOrchestrator` do not receive `ToolExecutor`.
+* Write, terminal, test, internet, web, and patch commands are not routed through the new tool-execution path.
+* Automatic model-driven execution loops are not enabled.
+
 ## v2.0.0 - Agent Orchestration Foundation
 
 Added:
