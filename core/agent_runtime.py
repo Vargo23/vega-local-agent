@@ -14,6 +14,11 @@ try:
 except ImportError:
     from scripts.version import APP_NAME, APP_SUBTITLE, VERSION
 
+from core.command_executor import (
+    CommandExecutionRequest,
+    CommandExecutionStatus,
+    CommandExecutor,
+)
 from core.command_router import CommandTarget
 from core.execution_context import ExecutionContext
 from core.ollama_client import (
@@ -850,19 +855,14 @@ def dispatch_docs_command(
     root: Path,
 ) -> None:
     """Execute the existing local documents command."""
-    try:
-        from rag.commands import (
-            handle_docs_command,
-        )
+    from rag.commands import (
+        handle_docs_command,
+    )
 
-        handle_docs_command(
-            command,
-            root,
-        )
-    except Exception as exc:
-        print(
-            f"VEGA docs command error: {exc}"
-        )
+    handle_docs_command(
+        command,
+        root,
+    )
 
 
 def build_orchestrator(
@@ -882,6 +882,52 @@ def build_orchestrator(
     )
 
     return AgentOrchestrator(context)
+
+
+def build_command_executor(
+    context: ExecutionContext,
+) -> CommandExecutor:
+    """Create compatibility handlers for routed runtime commands."""
+    if not isinstance(context, ExecutionContext):
+        raise TypeError(
+            "context must be an ExecutionContext instance."
+        )
+
+    def legacy_adapter(
+        request: CommandExecutionRequest,
+    ) -> bool:
+        return handle_command(
+            request.route.normalized_command,
+            context.project_root,
+            context.log_file,
+            context.model,
+            context.mode_session,
+        )
+
+    def docs_adapter(
+        request: CommandExecutionRequest,
+    ) -> None:
+        dispatch_docs_command(
+            request.route.normalized_command,
+            context.project_root,
+        )
+        append_log(
+            context.log_file,
+            "COMMAND",
+            request.route.normalized_command,
+        )
+
+    registry = {
+        target: legacy_adapter
+        for target in CommandTarget
+        if target not in {
+            CommandTarget.DOCS,
+            CommandTarget.UNKNOWN,
+        }
+    }
+    registry[CommandTarget.DOCS] = docs_adapter
+
+    return CommandExecutor(registry)
 
 
 def main() -> int:
@@ -915,6 +961,9 @@ def main() -> int:
         mode_session=mode_session,
     )
     context = orchestrator.context
+    command_executor = build_command_executor(
+        context
+    )
 
     from ui.startup_screen import (
         render_startup_screen,
@@ -983,27 +1032,23 @@ def main() -> int:
                     "Command result has no route."
                 )
 
-            if route.target is CommandTarget.DOCS:
-                dispatch_docs_command(
-                    route.normalized_command,
-                    context.project_root,
-                )
+            execution_result = command_executor.execute(
+                CommandExecutionRequest(route=route)
+            )
+
+            if (
+                execution_result.status
+                is not CommandExecutionStatus.SUCCESS
+            ):
+                print(execution_result.error)
                 append_log(
                     context.log_file,
-                    "COMMAND",
-                    route.normalized_command,
+                    "COMMAND_ERROR",
+                    execution_result.error,
                 )
                 continue
 
-            keep_running = handle_command(
-                route.normalized_command,
-                context.project_root,
-                context.log_file,
-                context.model,
-                context.mode_session,
-            )
-
-            if not keep_running:
+            if not execution_result.keep_running:
                 return 0
 
             continue
