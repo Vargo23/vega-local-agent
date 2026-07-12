@@ -30,6 +30,7 @@ from core.orchestrator import (
     OrchestrationKind,
 )
 from core.tool_executor import ToolExecutor
+from core.tool_executor_factory import build_production_tool_executor
 
 DEFAULT_MODEL = "vega-core"
 INTERNET = "OFF"
@@ -942,7 +943,7 @@ def build_command_executor(
         )
 
     if tool_executor is None:
-        tool_executor = ToolExecutor()
+        tool_executor = build_production_tool_executor()
     elif not isinstance(tool_executor, ToolExecutor):
         raise TypeError(
             "tool_executor must be a ToolExecutor instance."
@@ -1037,7 +1038,7 @@ def main() -> int:
         mode_session=mode_session,
     )
     context = orchestrator.context
-    tool_executor = ToolExecutor()
+    tool_executor = build_production_tool_executor()
     command_executor = build_command_executor(
         context,
         tool_executor=tool_executor,

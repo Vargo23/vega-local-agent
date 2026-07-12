@@ -6,6 +6,7 @@ import json
 import shlex
 
 from core.tool_executor import ToolExecutor
+from core.tool_executor_factory import build_production_tool_executor
 from tools.patch_tools import (
     apply_patch,
     list_patches,
@@ -389,7 +390,7 @@ def _resolve_tool_executor(
     tool_executor: ToolExecutor | None,
 ) -> ToolExecutor:
     if tool_executor is None:
-        return ToolExecutor()
+        return build_production_tool_executor()
 
     if not isinstance(tool_executor, ToolExecutor):
         raise TypeError(

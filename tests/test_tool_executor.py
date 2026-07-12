@@ -1,9 +1,18 @@
 import unittest
+from unittest.mock import patch
 
 from core.tool_executor import (
     ToolExecutionStatus,
     ToolExecutor,
     ToolRequest,
+)
+from permissions import (
+    PermissionCapability,
+    PermissionEffect,
+    PermissionEvaluator,
+    PermissionPolicy,
+    PermissionRisk,
+    PermissionRule,
 )
 
 
@@ -13,6 +22,25 @@ def add_values(left: int, right: int) -> int:
 
 def fail_tool() -> None:
     raise RuntimeError("controlled failure")
+
+
+def evaluator_for(effect, name="sample"):
+    rule = PermissionRule(
+        name,
+        (PermissionCapability.PROJECT_READ,),
+        PermissionRisk.LOW,
+        effect,
+        False,
+        "Test rule.",
+    )
+    policy = PermissionPolicy(
+        1,
+        PermissionEffect.DENY,
+        "CONFIRM",
+        10,
+        (rule,),
+    )
+    return PermissionEvaluator(policy)
 
 
 class UninspectableTool:
@@ -28,6 +56,75 @@ class UninspectableTool:
 
 
 class ToolExecutorTests(unittest.TestCase):
+    def test_allow_invokes_callable(self) -> None:
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator_for(PermissionEffect.ALLOW),
+        )
+        self.assertTrue(executor.execute_named("sample").ok)
+        self.assertEqual(calls, [True])
+
+    def test_deny_never_invokes_callable(self) -> None:
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator_for(PermissionEffect.DENY),
+        )
+        result = executor.execute_named("sample")
+        self.assertEqual(result.error_code, "permission_denied")
+        self.assertEqual(calls, [])
+
+    def test_confirm_without_or_with_bad_token_never_invokes(self) -> None:
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator_for(PermissionEffect.CONFIRM),
+        )
+        for token in (None, "confirm", "CONFIRM "):
+            with self.subTest(token=token):
+                result = executor.execute_named("sample", confirmation_token=token)
+                self.assertEqual(result.error_code, "confirmation_required")
+        self.assertEqual(calls, [])
+
+    def test_exact_confirmation_invokes_once_and_is_not_forwarded(self) -> None:
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator_for(PermissionEffect.CONFIRM),
+        )
+        self.assertTrue(executor.execute_named("sample", confirmation_token="CONFIRM").ok)
+        self.assertEqual(calls, [True])
+        self.assertEqual(executor.execute_named("sample").error_code, "confirmation_required")
+        self.assertEqual(calls, [True])
+
+    def test_direct_execute_cannot_bypass_permissions(self) -> None:
+        calls = []
+        executor = ToolExecutor(
+            {"sample": lambda: calls.append(True)},
+            evaluator_for(PermissionEffect.DENY),
+        )
+        self.assertEqual(executor.execute(ToolRequest("sample")).error_code, "permission_denied")
+        self.assertEqual(calls, [])
+
+    def test_missing_rule_and_evaluator_exception_fail_closed(self) -> None:
+        calls = []
+        evaluator = evaluator_for(PermissionEffect.ALLOW, "other")
+        executor = ToolExecutor({"sample": lambda: calls.append(True)}, evaluator)
+        self.assertEqual(executor.execute_named("sample").error_code, "permission_policy_error")
+        with patch.object(evaluator, "evaluate", side_effect=RuntimeError("broken")):
+            self.assertEqual(executor.execute_named("sample").error_code, "permission_policy_error")
+        self.assertEqual(calls, [])
+
+    def test_unknown_tool_result_precedes_permission_check(self) -> None:
+        evaluator = evaluator_for(PermissionEffect.ALLOW)
+        with patch.object(evaluator, "evaluate", side_effect=AssertionError("called")):
+            result = ToolExecutor({}, evaluator).execute_named("missing")
+            self.assertIs(result.status, ToolExecutionStatus.UNKNOWN_TOOL)
+
+    def test_partial_registry_without_evaluator_preserves_behavior(self) -> None:
+        self.assertTrue(ToolExecutor({"custom": lambda: 1}).execute_named("custom").ok)
+
     def test_valid_request_is_normalized(self) -> None:
         request = ToolRequest(
             "  add  ",

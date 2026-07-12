@@ -9,6 +9,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from permissions.evaluator import PermissionEvaluator
+from permissions.models import PermissionEffect
 from tools.registry import TOOL_REGISTRY
 
 
@@ -27,6 +29,7 @@ class ToolRequest:
 
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
+    confirmation_token: str | None = None
 
     def __post_init__(self) -> None:
         """Normalize and detach request values from caller state."""
@@ -40,6 +43,11 @@ class ToolRequest:
 
         if not isinstance(self.arguments, dict):
             raise TypeError("arguments must be a dictionary.")
+        if self.confirmation_token is not None and not isinstance(
+            self.confirmation_token,
+            str,
+        ):
+            raise TypeError("confirmation_token must be a string or None.")
 
         object.__setattr__(self, "tool_name", normalized_name)
         object.__setattr__(self, "arguments", dict(self.arguments))
@@ -53,6 +61,7 @@ class ToolExecutionResult:
     tool_name: str
     data: Any = None
     error: str = ""
+    error_code: str = ""
 
     @property
     def ok(self) -> bool:
@@ -66,6 +75,7 @@ class ToolExecutor:
     def __init__(
         self,
         registry: Mapping[str, Callable[..., Any]] | None = None,
+        permission_evaluator: PermissionEvaluator | None = None,
     ) -> None:
         configured_registry = (
             TOOL_REGISTRY if registry is None else registry
@@ -98,6 +108,14 @@ class ToolExecutor:
             validated[normalized_name] = tool
 
         self._registry = MappingProxyType(validated)
+        if permission_evaluator is not None and not isinstance(
+            permission_evaluator,
+            PermissionEvaluator,
+        ):
+            raise TypeError(
+                "permission_evaluator must be a PermissionEvaluator instance."
+            )
+        self._permission_evaluator = permission_evaluator
 
     def registered_tools(self) -> tuple[str, ...]:
         """Return registered tool names in sorted order."""
@@ -116,6 +134,10 @@ class ToolExecutor:
                 tool_name=request.tool_name,
                 error=f"Unknown tool: {request.tool_name}.",
             )
+
+        permission_failure = self._permission_failure(request)
+        if permission_failure is not None:
+            return permission_failure
 
         try:
             signature = inspect.signature(tool)
@@ -153,9 +175,58 @@ class ToolExecutor:
             data=data,
         )
 
+    def _permission_failure(
+        self,
+        request: ToolRequest,
+    ) -> ToolExecutionResult | None:
+        evaluator = self._permission_evaluator
+        if evaluator is None:
+            return None
+        try:
+            decision = evaluator.evaluate(request.tool_name)
+            if decision.allowed:
+                return None
+            if decision.confirmation_required:
+                if evaluator.accepts_confirmation(request.confirmation_token):
+                    return None
+                return ToolExecutionResult(
+                    ToolExecutionStatus.FAILED,
+                    request.tool_name,
+                    error="Tool execution requires explicit confirmation.",
+                    error_code="confirmation_required",
+                )
+            if decision.effect is PermissionEffect.DENY and not decision.error_code:
+                return ToolExecutionResult(
+                    ToolExecutionStatus.FAILED,
+                    request.tool_name,
+                    error="Tool execution is denied by permission policy.",
+                    error_code="permission_denied",
+                )
+            return ToolExecutionResult(
+                ToolExecutionStatus.FAILED,
+                request.tool_name,
+                error=(
+                    "Tool execution failed closed due to permission policy "
+                    "state."
+                ),
+                error_code="permission_policy_error",
+            )
+        except Exception as exc:
+            return ToolExecutionResult(
+                ToolExecutionStatus.FAILED,
+                request.tool_name,
+                error=(
+                    "Permission evaluation failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                error_code="permission_policy_error",
+            )
+
     def execute_named(
         self,
         tool_name: str,
+        *,
+        confirmation_token: str | None = None,
         **arguments: Any,
     ) -> ToolExecutionResult:
         """Build and execute one named tool request."""
@@ -163,5 +234,6 @@ class ToolExecutor:
             ToolRequest(
                 tool_name=tool_name,
                 arguments=arguments,
+                confirmation_token=confirmation_token,
             )
         )
