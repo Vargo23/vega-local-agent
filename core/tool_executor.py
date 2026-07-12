@@ -62,6 +62,8 @@ class ToolExecutionResult:
     data: Any = None
     error: str = ""
     error_code: str = ""
+    permission_risk: str = ""
+    permission_capabilities: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -194,6 +196,10 @@ class ToolExecutor:
                     request.tool_name,
                     error="Tool execution requires explicit confirmation.",
                     error_code="confirmation_required",
+                    permission_risk=decision.rule.risk.value,
+                    permission_capabilities=tuple(
+                        item.value for item in decision.rule.capabilities
+                    ),
                 )
             if decision.effect is PermissionEffect.DENY and not decision.error_code:
                 return ToolExecutionResult(
@@ -237,3 +243,20 @@ class ToolExecutor:
                 confirmation_token=confirmation_token,
             )
         )
+
+    def _execute_confirmed_once(
+        self,
+        request: ToolRequest,
+    ) -> ToolExecutionResult:
+        """Retry one request with the evaluator's validated internal token."""
+        if not isinstance(request, ToolRequest):
+            raise TypeError("request must be a ToolRequest instance.")
+        evaluator = self._permission_evaluator
+        if evaluator is None:
+            return self.execute(request)
+        confirmed = ToolRequest(
+            request.tool_name,
+            dict(request.arguments),
+            confirmation_token=evaluator.confirmation_token,
+        )
+        return self.execute(confirmed)

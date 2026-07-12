@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 import shlex
 
-from core.tool_executor import ToolExecutor
+from core.tool_confirmation import (
+    ToolConfirmationManager,
+    execute_tool_with_confirmation,
+)
+from core.tool_executor import ToolExecutor, ToolRequest
 from core.tool_executor_factory import build_production_tool_executor
 from tools.patch_tools import (
     apply_patch,
@@ -37,13 +41,13 @@ PATCH_HELP = """Patch commands (confirmed safe writes):
   /patch list rolled_back             List rolled-back patches
   /patch show <patch_id>              Show patch metadata and diff
   /patch propose <target> <proposal>  Propose target content from another file
-  /patch apply <patch_id> CONFIRM     Apply a pending patch
-  /patch rollback <patch_id> CONFIRM  Roll back an applied patch
+  /patch apply <patch_id>             Apply a pending patch after approval
+  /patch rollback <patch_id>          Roll back an applied patch after approval
 
 Examples:
   /patch propose README.md README.proposal.md "Update documentation"
   /patch show patch-20260710T150136Z-6ba02018
-  /patch apply patch-20260710T150136Z-6ba02018 CONFIRM"""
+  /patch apply patch-20260710T150136Z-6ba02018"""
 
 
 GIT_HELP = """Git commands (safe read-only access):
@@ -455,7 +459,12 @@ def handle_file_command(
     )
 
 
-def handle_patch_command(command: str, mode_session=None) -> str:
+def handle_patch_command(
+    command: str,
+    mode_session=None,
+    tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
+) -> str:
     try:
         parts = shlex.split(command, posix=False)
     except ValueError as exc:
@@ -500,37 +509,64 @@ def handle_patch_command(command: str, mode_session=None) -> str:
             for part in parts[4:]
         ).strip()
 
-        result = propose_patch_from_file(
-            target_path,
-            proposal_path,
-            reason,
-        )
+        if tool_executor is None:
+            result = propose_patch_from_file(
+                target_path, proposal_path, reason
+            )
+        else:
+            execution = execute_tool_with_confirmation(
+                tool_executor,
+                ToolRequest("propose_patch_from_file", {
+                    "target_path": target_path,
+                    "proposal_path": proposal_path,
+                    "reason": reason,
+                }),
+                tool_confirmation_manager,
+            )
+            if not execution.ok:
+                return f"Patch command error: {execution.error}"
+            result = execution.data
 
     elif action == "apply" and len(parts) in {3, 4}:
         patch_id = _clean_cli_token(parts[2])
-
-        confirmed = (
-            len(parts) == 4
-            and _clean_cli_token(parts[3]) == "CONFIRM"
-        )
-
-        result = apply_patch(
-            patch_id,
-            confirmed=confirmed,
-        )
+        if tool_executor is None:
+            confirmed = len(parts) == 4 and _clean_cli_token(parts[3]) == "CONFIRM"
+            result = apply_patch(patch_id, confirmed=confirmed)
+        elif len(parts) != 3:
+            return PATCH_HELP
+        else:
+            execution = execute_tool_with_confirmation(
+                tool_executor,
+                ToolRequest("apply_patch", {
+                    "patch_id": patch_id,
+                    "confirmed": True,
+                }),
+                tool_confirmation_manager,
+            )
+            if not execution.ok:
+                return f"Patch command error: {execution.error}"
+            result = execution.data
 
     elif action == "rollback" and len(parts) in {3, 4}:
         patch_id = _clean_cli_token(parts[2])
 
-        confirmed = (
-            len(parts) == 4
-            and _clean_cli_token(parts[3]) == "CONFIRM"
-        )
-
-        result = rollback_patch(
-            patch_id,
-            confirmed=confirmed,
-        )
+        if tool_executor is None:
+            confirmed = len(parts) == 4 and _clean_cli_token(parts[3]) == "CONFIRM"
+            result = rollback_patch(patch_id, confirmed=confirmed)
+        elif len(parts) != 3:
+            return PATCH_HELP
+        else:
+            execution = execute_tool_with_confirmation(
+                tool_executor,
+                ToolRequest("rollback_patch", {
+                    "patch_id": patch_id,
+                    "confirmed": True,
+                }),
+                tool_confirmation_manager,
+            )
+            if not execution.ok:
+                return f"Patch command error: {execution.error}"
+            result = execution.data
 
     else:
         return PATCH_HELP
@@ -627,7 +663,7 @@ def handle_git_command(
 
     return result.stdout.rstrip()
 
-def handle_memory_command(command: str, project_root=None) -> str:
+def handle_memory_command(command: str, project_root=None, tool_executor: ToolExecutor | None = None, tool_confirmation_manager: ToolConfirmationManager | None = None) -> str:
     from memory.project_memory import add_memory, get_memory_stats, list_memories, search_memories
 
     try:
@@ -641,7 +677,14 @@ def handle_memory_command(command: str, project_root=None) -> str:
 
     action = parts[1].lower()
     if action == "add" and len(parts) >= 4:
-        result = add_memory(parts[2], " ".join(parts[3:]), project_root)
+        arguments = {"kind": parts[2], "text": " ".join(parts[3:]), "project_root": project_root}
+        if tool_executor is None:
+            result = add_memory(**arguments)
+        else:
+            execution = execute_tool_with_confirmation(tool_executor, ToolRequest("memory_add", arguments), tool_confirmation_manager)
+            if not execution.ok:
+                return f"Memory command error: {execution.error}"
+            result = execution.data
     elif action == "list" and len(parts) in {2, 3}:
         result = list_memories(parts[2] if len(parts) == 3 else None, project_root)
     elif action == "search" and len(parts) >= 3:
@@ -656,7 +699,12 @@ def handle_memory_command(command: str, project_root=None) -> str:
     return json.dumps(result["data"], ensure_ascii=False, indent=2)
 
 
-def handle_terminal_command(command: str, project_root=None) -> str:
+def handle_terminal_command(
+    command: str,
+    project_root=None,
+    tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
+) -> str:
     from tools.terminal_tools import list_allowed_commands, run_allowed_command
 
     try:
@@ -687,7 +735,23 @@ def handle_terminal_command(command: str, project_root=None) -> str:
             )
         return "\n".join(lines)
 
-    result = run_allowed_command(command_id, project_root)
+    if tool_executor is None:
+        result = run_allowed_command(command_id, project_root)
+    else:
+        execution_result = execute_tool_with_confirmation(
+            tool_executor,
+            ToolRequest(
+                "terminal_run",
+                {
+                    "command_id": command_id,
+                    "project_root": project_root,
+                },
+            ),
+            tool_confirmation_manager,
+        )
+        if not execution_result.ok:
+            return f"Terminal command error: {execution_result.error}"
+        result = execution_result.data
     if result["data"] is None:
         return (
             f"Terminal command error: {result['error']}\n"
@@ -710,7 +774,7 @@ def handle_terminal_command(command: str, project_root=None) -> str:
     return "\n".join(lines)
 
 
-def handle_test_command(command: str, project_root=None) -> str:
+def handle_test_command(command: str, project_root=None, tool_executor: ToolExecutor | None = None, tool_confirmation_manager: ToolConfirmationManager | None = None) -> str:
     from tools.test_tools import list_test_groups, run_test_group
 
     try:
@@ -755,7 +819,13 @@ def handle_test_command(command: str, project_root=None) -> str:
             "Run /test list to see available groups."
         )
 
-    result = run_test_group(group_id, project_root)
+    if tool_executor is None:
+        result = run_test_group(group_id, project_root)
+    else:
+        execution = execute_tool_with_confirmation(tool_executor, ToolRequest("test_run", {"group_id": group_id, "project_root": project_root}), tool_confirmation_manager)
+        if not execution.ok:
+            return f"Test command error: {execution.error}"
+        result = execution.data
 
     if result["data"] is None:
         return (
@@ -788,7 +858,7 @@ def handle_test_command(command: str, project_root=None) -> str:
     return "\n".join(lines)
 
 
-def handle_internet_command(command: str) -> str:
+def handle_internet_command(command: str, tool_executor: ToolExecutor | None = None, tool_confirmation_manager: ToolConfirmationManager | None = None) -> str:
     from core.internet_state import (
         is_internet_enabled,
         set_internet_enabled,
@@ -824,14 +894,24 @@ def handle_internet_command(command: str) -> str:
         )
 
     if action == "on":
-        set_internet_enabled(True)
+        if tool_executor is None:
+            set_internet_enabled(True)
+        else:
+            execution = execute_tool_with_confirmation(tool_executor, ToolRequest("internet_set", {"enabled": True}), tool_confirmation_manager)
+            if not execution.ok:
+                return f"Internet command error: {execution.error}"
         return (
             "Internet access enabled for this "
             "VEGA process."
         )
 
     if action == "off":
-        set_internet_enabled(False)
+        if tool_executor is None:
+            set_internet_enabled(False)
+        else:
+            execution = execute_tool_with_confirmation(tool_executor, ToolRequest("internet_set", {"enabled": False}), tool_confirmation_manager)
+            if not execution.ok:
+                return f"Internet command error: {execution.error}"
         return (
             "Internet access disabled for this "
             "VEGA process."
@@ -843,6 +923,8 @@ def handle_internet_command(command: str) -> str:
 def handle_web_command(
     command: str,
     project_root=None,
+    tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
 ) -> str:
     from tools.web_tools import fetch_url
 
@@ -862,10 +944,14 @@ def handle_web_command(
     ):
         return WEB_HELP
 
-    result = fetch_url(
-        parts[2],
-        project_root,
-    )
+    arguments = {"url": parts[2], "project_root": project_root}
+    if tool_executor is None:
+        result = fetch_url(parts[2], project_root)
+    else:
+        execution = execute_tool_with_confirmation(tool_executor, ToolRequest("web_fetch", arguments), tool_confirmation_manager)
+        if not execution.ok:
+            return f"Web command error: {execution.error}"
+        result = execution.data
 
     if not result["ok"]:
         return f"Web command error: {result['error']}"
@@ -903,6 +989,8 @@ def handle_web_command(
 def handle_docgen_command(
     command: str,
     project_root=None,
+    tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
 ) -> str:
     """Handle safe Documentation Builder commands."""
 
@@ -1016,7 +1104,13 @@ def handle_docgen_command(
         return "\n".join(lines)
 
     if action == "build":
-        result = build_documentation(project_root)
+        if tool_executor is None:
+            result = build_documentation(project_root)
+        else:
+            execution = execute_tool_with_confirmation(tool_executor, ToolRequest("documentation_build", {"project_root": project_root}), tool_confirmation_manager)
+            if not execution.ok:
+                return f"Documentation command error: {execution.error}"
+            result = execution.data
 
         if not result["ok"]:
             return (
@@ -1088,6 +1182,8 @@ def handle_docgen_command(
 def handle_release_command(
     command: str,
     project_root=None,
+    tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
 ) -> str:
     """Handle read-only Release Manager commands."""
 
@@ -1149,7 +1245,13 @@ def handle_release_command(
         return "\n".join(lines)
 
     if action == "check" and len(parts) == 2:
-        result = run_release_check(project_root)
+        if tool_executor is None:
+            result = run_release_check(project_root)
+        else:
+            execution = execute_tool_with_confirmation(tool_executor, ToolRequest("release_check", {"project_root": project_root}), tool_confirmation_manager)
+            if not execution.ok:
+                return f"Release command error: {execution.error}"
+            result = execution.data
 
         if not result["ok"]:
             return f"Release command error: {result['error']}"

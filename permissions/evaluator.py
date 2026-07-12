@@ -60,5 +60,10 @@ class PermissionEvaluator:
     def accepts_confirmation(self, token: object) -> bool:
         return token == self._policy.confirmation_token
 
+    @property
+    def confirmation_token(self) -> str:
+        """Return the token already validated by PermissionPolicy."""
+        return self._policy.confirmation_token
+
 
 __all__ = ["PermissionDecision", "PermissionEvaluator"]

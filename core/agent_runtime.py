@@ -19,6 +19,7 @@ from core.command_executor import (
     CommandExecutionStatus,
     CommandExecutor,
 )
+from core.tool_confirmation import ToolConfirmationManager
 from core.command_router import CommandTarget
 from core.execution_context import ExecutionContext
 from core.ollama_client import (
@@ -782,6 +783,7 @@ def handle_command(
     model: str,
     mode_session=None,
     tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
 ) -> bool:
     command = command.strip()
     lower = command.lower()
@@ -820,7 +822,15 @@ def handle_command(
         )
     elif lower == "/patch" or lower.startswith("/patch "):
         from core.command_handler import handle_patch_command
-        print(handle_patch_command(command, mode_session))
+        if tool_confirmation_manager is None:
+            print(handle_patch_command(command, mode_session))
+        else:
+            print(handle_patch_command(
+                command,
+                mode_session,
+                tool_executor=tool_executor,
+                tool_confirmation_manager=tool_confirmation_manager,
+            ))
     elif lower == "/git" or lower.startswith("/git "):
         from core.command_handler import handle_git_command
         print(
@@ -839,19 +849,36 @@ def handle_command(
         )
     elif lower == "/memory" or lower.startswith("/memory "):
         from core.command_handler import handle_memory_command
-        print(handle_memory_command(command, root))
+        if tool_confirmation_manager is None:
+            print(handle_memory_command(command, root))
+        else:
+            print(handle_memory_command(command, root, tool_executor, tool_confirmation_manager))
     elif lower == "/run" or lower.startswith("/run "):
         from core.command_handler import handle_terminal_command
-        print(handle_terminal_command(command, root))
+        print(handle_terminal_command(
+            command,
+            root,
+            tool_executor=tool_executor,
+            tool_confirmation_manager=tool_confirmation_manager,
+        ))
     elif lower == "/test" or lower.startswith("/test "):
         from core.command_handler import handle_test_command
-        print(handle_test_command(command, root))
+        if tool_confirmation_manager is None:
+            print(handle_test_command(command, root))
+        else:
+            print(handle_test_command(command, root, tool_executor, tool_confirmation_manager))
     elif lower == "/internet" or lower.startswith("/internet "):
         from core.command_handler import handle_internet_command
-        print(handle_internet_command(command))
+        if tool_confirmation_manager is None:
+            print(handle_internet_command(command))
+        else:
+            print(handle_internet_command(command, tool_executor, tool_confirmation_manager))
     elif lower == "/web" or lower.startswith("/web "):
         from core.command_handler import handle_web_command
-        print(handle_web_command(command, root))
+        if tool_confirmation_manager is None:
+            print(handle_web_command(command, root))
+        else:
+            print(handle_web_command(command, root, tool_executor, tool_confirmation_manager))
     elif lower == "/mode" or lower.startswith("/mode "):
         from core.command_handler import handle_mode_command
 
@@ -862,11 +889,17 @@ def handle_command(
     elif lower == "/docgen" or lower.startswith("/docgen "):
         from core.command_handler import handle_docgen_command
 
-        print(handle_docgen_command(command, root))
+        if tool_confirmation_manager is None:
+            print(handle_docgen_command(command, root))
+        else:
+            print(handle_docgen_command(command, root, tool_executor, tool_confirmation_manager))
     elif lower == "/release" or lower.startswith("/release "):
         from core.command_handler import handle_release_command
 
-        print(handle_release_command(command, root))
+        if tool_confirmation_manager is None:
+            print(handle_release_command(command, root))
+        else:
+            print(handle_release_command(command, root, tool_executor, tool_confirmation_manager))
     elif lower == "/workflow" or lower.startswith("/workflow "):
         from core.command_handler import handle_workflow_command
 
@@ -935,6 +968,7 @@ def build_command_executor(
     context: ExecutionContext,
     *,
     tool_executor: ToolExecutor | None = None,
+    tool_confirmation_manager: ToolConfirmationManager | None = None,
 ) -> CommandExecutor:
     """Create compatibility handlers for routed runtime commands."""
     if not isinstance(context, ExecutionContext):
@@ -952,13 +986,16 @@ def build_command_executor(
     def legacy_adapter(
         request: CommandExecutionRequest,
     ) -> bool:
+        arguments = {"tool_executor": tool_executor}
+        if tool_confirmation_manager is not None:
+            arguments["tool_confirmation_manager"] = tool_confirmation_manager
         return handle_command(
             request.route.normalized_command,
             context.project_root,
             context.log_file,
             context.model,
             context.mode_session,
-            tool_executor=tool_executor,
+            **arguments,
         )
 
     def docs_adapter(
@@ -1039,9 +1076,11 @@ def main() -> int:
     )
     context = orchestrator.context
     tool_executor = build_production_tool_executor()
+    tool_confirmation_manager = ToolConfirmationManager(input)
     command_executor = build_command_executor(
         context,
         tool_executor=tool_executor,
+        tool_confirmation_manager=tool_confirmation_manager,
     )
 
     from ui.startup_screen import (
