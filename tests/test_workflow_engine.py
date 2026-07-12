@@ -22,6 +22,27 @@ class VerificationStub:
     def __init__(self,ok=True): self.ok=ok; self.runs=0
     def run_once(self,run): self.runs+=1; return {"ok":self.ok,"runs":self.runs,"workflow":run.workflow_type,"error":None if self.ok else "failed"}
 
+class LoopPatchStub:
+    def __init__(self): self.applied=[]; self.states={}
+    def prepare(self,run):
+        patch_id=run.artifacts.get("requested_patch_id")
+        if not patch_id: raise WorkflowError("patch required")
+        self.states.setdefault(patch_id,"pending")
+        return {"patch_id":patch_id,"status":"pending","target_path":f"{patch_id}.py"}
+    def apply(self,patch_id,confirmed=False):
+        if not confirmed: return {"ok":False,"error":"confirmation required","data":None}
+        if self.states.get(patch_id)!="pending": raise AssertionError("patch applied twice")
+        self.states[patch_id]="applied"; self.applied.append(patch_id)
+        return {"ok":True,"error":None,"data":{"patch_id":patch_id,"status":"applied","target_path":f"{patch_id}.py"}}
+    def inspect(self,patch_id): return {"patch_id":patch_id,"status":self.states.get(patch_id),"target_path":f"{patch_id}.py"}
+
+class SequenceVerifier:
+    def __init__(self,results): self.results=list(results); self.runs=0
+    def run_once(self,run):
+        del run
+        result=self.results[self.runs]; self.runs+=1
+        return {"ok":result,"runs":self.runs,"error":None if result else "failed"}
+
 class WorkflowEngineTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup); self.root=Path(self.temp.name)
@@ -94,8 +115,31 @@ class WorkflowEngineTests(unittest.TestCase):
     def test_failed_verification_runs_once(self):
         failing=VerificationStub(False); engine=WorkflowEngine(self.root,default_registry(),confirmation_manager=ConfirmationManager(),patch_tools=self.patch,test_tools=failing)
         engine.start("bugfix","Fix error",patch_id="patch-1")
+        run=engine.confirm()
+        self.assertEqual(failing.runs,1); self.assertEqual(run.status,WorkflowStatus.WAITING_PATCH)
+        self.assertEqual(len(run.test_fix_iterations),1)
+    def test_failed_test_accepts_a_new_confirmed_fix(self):
+        patch=LoopPatchStub(); tests=SequenceVerifier([False,True])
+        engine=WorkflowEngine(self.root,default_registry(),confirmation_manager=ConfirmationManager(),patch_tools=patch,test_tools=tests)
+        engine.start("bugfix","Fix error",patch_id="patch-1")
+        waiting=engine.confirm()
+        self.assertEqual(waiting.status,WorkflowStatus.WAITING_PATCH)
+        engine.attach_patch("patch-2")
+        completed=engine.confirm()
+        self.assertEqual(completed.status,WorkflowStatus.COMPLETED)
+        self.assertEqual(patch.applied,["patch-1","patch-2"])
+        self.assertEqual(len(completed.test_fix_iterations),2)
+        self.assertEqual(completed.changed_files,["patch-1.py","patch-2.py"])
+    def test_fix_limit_fails_closed(self):
+        patch=LoopPatchStub(); tests=SequenceVerifier([False,False,False])
+        engine=WorkflowEngine(self.root,default_registry(),confirmation_manager=ConfirmationManager(),patch_tools=patch,test_tools=tests)
+        engine.start("bugfix","Fix error",patch_id="patch-1"); engine.confirm()
+        engine.attach_patch("patch-2"); engine.confirm(); engine.attach_patch("patch-3")
         with self.assertRaises(WorkflowError): engine.confirm()
-        self.assertEqual(failing.runs,1); self.assertTrue(engine.history()[0].manual_intervention_required)
+        failed=engine.history()[0]
+        self.assertEqual(failed.status,WorkflowStatus.FAILED)
+        self.assertEqual(len(failed.test_fix_iterations),3)
+        self.assertTrue(failed.manual_intervention_required)
     def test_unrelated_confirmation_is_not_cleared_on_failure(self):
         manager=ConfirmationManager(); manager.request("other","other","Other action")
         engine=WorkflowEngine(self.root,default_registry(),confirmation_manager=manager,patch_tools=self.patch,test_tools=self.tests)

@@ -48,7 +48,7 @@ ALLOWED_TRANSITIONS={
  WorkflowStatus.WAITING_PATCH:frozenset({WorkflowStatus.WAITING_CONFIRMATION,WorkflowStatus.CANCELLED,WorkflowStatus.FAILED}),
  WorkflowStatus.WAITING_CONFIRMATION:frozenset({WorkflowStatus.EXECUTING,WorkflowStatus.CANCELLED,WorkflowStatus.FAILED}),
  WorkflowStatus.EXECUTING:frozenset({WorkflowStatus.VERIFYING,WorkflowStatus.CANCELLED,WorkflowStatus.FAILED}),
- WorkflowStatus.VERIFYING:frozenset({WorkflowStatus.COMPLETED,WorkflowStatus.FAILED,WorkflowStatus.CANCELLED}),
+ WorkflowStatus.VERIFYING:frozenset({WorkflowStatus.WAITING_PATCH,WorkflowStatus.COMPLETED,WorkflowStatus.FAILED,WorkflowStatus.CANCELLED}),
  WorkflowStatus.COMPLETED:frozenset(),WorkflowStatus.FAILED:frozenset(),WorkflowStatus.CANCELLED:frozenset(),}
 
 
@@ -137,6 +137,8 @@ class WorkflowRun:
     artifacts: dict[str, Any] = field(default_factory=dict)
     required_confirmations: list[str] = field(default_factory=list)
     verification_results: list[dict[str, Any]] = field(default_factory=list)
+    test_fix_iterations: list[dict[str, Any]] = field(default_factory=list)
+    max_fix_attempts: int = 3
     changed_files: list[str] = field(default_factory=list)
     manual_intervention_required: bool = False
     patch: dict[str, Any] | None = None
@@ -145,6 +147,13 @@ class WorkflowRun:
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
     linked_task_id: str | None = None
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.max_fix_attempts, bool)
+            or not isinstance(self.max_fix_attempts, int)
+            or not 1 <= self.max_fix_attempts <= 10
+        ):
+            raise ValueError("max_fix_attempts must be between 1 and 10.")
     @classmethod
     def create(
         cls,

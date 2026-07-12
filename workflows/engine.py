@@ -171,7 +171,8 @@ class WorkflowEngine:
                 )
             data = application.get("data") or {}
             run.artifacts["application_result"] = application
-            run.changed_files=[data["target_path"]] if data.get("target_path") else []
+            if data.get("target_path") and data["target_path"] not in run.changed_files:
+                run.changed_files.append(data["target_path"])
             if data.get("status") != "applied" or not run.changed_files:
                 raise WorkflowError(
                     "Workflow cannot complete without an applied change artifact."
@@ -245,13 +246,15 @@ class WorkflowEngine:
             if apply_step.status is StepStatus.PENDING:
                 apply_step.start()
             apply_step.complete({"ok":True,"data":state,"recovered":True})
-        run.changed_files=[state["target_path"]] if state.get("target_path") else []
+        if state.get("target_path") and state["target_path"] not in run.changed_files:
+            run.changed_files.append(state["target_path"])
         run.transition(WorkflowStatus.VERIFYING)
         self._save(run)
         return self._recover_verifying(run)
     def _recover_verifying(self,run):
         workflow=self.registry.get(run.workflow_type)
-        if not run.verification_results:
+        verify_step=run.step("verify")
+        if verify_step.status is not StepStatus.COMPLETED:
             verification = self._execute_step(
                 run,
                 "verify",
@@ -259,11 +262,12 @@ class WorkflowEngine:
             )
             run.verification_results.append(verification)
             self._save(run)
-        verification=run.verification_results[-1]
+        else:
+            verification=verify_step.result
+        if len(run.test_fix_iterations) < len(run.verification_results):
+            self._record_iteration(run,verification)
         if verification.get("ok") is not True:
-            raise WorkflowError(
-                verification.get("error") or "Workflow verification failed."
-            )
+            return self._continue_after_failed_verification(run,verification)
         application_evidence = (
             run.artifacts.get("application_result")
             or run.step("apply").result
@@ -276,6 +280,47 @@ class WorkflowEngine:
         self._save(run)
         self._archive(run)
         return run
+    def _continue_after_failed_verification(self,run,verification):
+        if len(run.test_fix_iterations) >= run.max_fix_attempts:
+            raise WorkflowError(
+                "Workflow verification failed and the controlled fix "
+                f"limit ({run.max_fix_attempts}) was reached: "
+                f"{verification.get('error') or 'tests failed'}"
+            )
+        run.artifacts.setdefault("application_results",[]).append(
+            run.test_fix_iterations[-1]["application"]
+        )
+        run.artifacts.pop("application_result",None)
+        run.artifacts.pop("requested_patch_id",None)
+        run.patch=None
+        run.required_confirmations=[]
+        for step_id in ("patch","confirmation","apply","verify"):
+            self._reset_step(run.step(step_id))
+        run.transition(WorkflowStatus.WAITING_PATCH)
+        self._save(run)
+        return run
+    def _record_iteration(self,run,verification):
+        patch=dict(run.patch or {})
+        application=(
+            run.artifacts.get("application_result")
+            or run.step("apply").result
+            or {}
+        )
+        run.test_fix_iterations.append({
+            "attempt":len(run.test_fix_iterations)+1,
+            "patch_id":patch.get("patch_id"),
+            "target_path":patch.get("target_path"),
+            "application":application,
+            "verification":verification,
+        })
+        self._save(run)
+    @staticmethod
+    def _reset_step(step):
+        step.status=StepStatus.PENDING
+        step.result=None
+        step.error=""
+        step.started_at=None
+        step.completed_at=None
     def _execute_step(
         self,
         run,
@@ -402,6 +447,7 @@ class WorkflowEngine:
                 f"Patch ID: {patch_id or 'none'}",
                 f"Patch applied: {applied}",
                 f"Checks: {len(run.verification_results)}",
+                f"Fix attempts: {len(run.test_fix_iterations)}/{run.max_fix_attempts}",
                 f"Verification results: {run.verification_results}",
                 f"Error: {run.error or 'none'}",
                 "Manual intervention required: "

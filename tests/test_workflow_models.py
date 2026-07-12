@@ -21,6 +21,13 @@ class WorkflowModelTests(unittest.TestCase):
         with self.assertRaises(WorkflowStateError):
             validate_transition("created", "completed")
 
+    def test_fix_attempt_limit_is_validated_on_load(self):
+        run = WorkflowRun.create("feature", "Add search", [])
+        data = run.to_dict()
+        data["max_fix_attempts"] = 0
+        with self.assertRaises(ValueError):
+            WorkflowRun.from_dict(data)
+
 
 if __name__ == "__main__":
     unittest.main()

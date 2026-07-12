@@ -70,7 +70,7 @@ class PatchToolsAdapter:
 
 
 class TestToolsAdapter:
-    """Run the existing controlled test group exactly once."""
+    """Run one controlled test group for the current workflow iteration."""
 
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
@@ -83,14 +83,18 @@ class TestToolsAdapter:
             raise WorkflowError(f"Test Tools are unavailable: {exc}") from exc
 
         result = run_test_group("all", self.project_root)
-        if not isinstance(result, dict) or not result.get("ok"):
+        if not isinstance(result, dict):
             raise WorkflowError(
-                (result or {}).get("error")
-                or "Test Tools verification failed."
+                "Test Tools returned an invalid result."
+            )
+        if not result.get("ok") and result.get("data") is None:
+            raise WorkflowError(
+                result.get("error")
+                or "Test Tools could not start verification."
             )
         return {
-            "ok": True,
-            "error": None,
+            "ok": bool(result.get("ok")),
+            "error": result.get("error"),
             "data": result.get("data"),
             "runs": 1,
             "group": "all",

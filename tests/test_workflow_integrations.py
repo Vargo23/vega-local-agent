@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from core.confirmation_manager import ConfirmationManager
 from workflows import WorkflowEngine,default_registry
-from workflows.integrations import PatchToolsAdapter
+from workflows.integrations import PatchToolsAdapter, TestToolsAdapter
 from workflows.models import WorkflowError,WorkflowStatus
 
 class Verifier:
@@ -57,5 +57,18 @@ class ProductionIntegrationTests(unittest.TestCase):
         run=engine.start("feature","Implement export",patch_id=patch_id)
         self.assertEqual(run.status,WorkflowStatus.WAITING_CONFIRMATION)
         self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"before\n")
+
+    @patch("tools.test_tools.run_test_group")
+    def test_test_adapter_returns_real_test_failure(self, run_group):
+        run_group.return_value={"ok":False,"error":"tests failed","data":{"returncode":1}}
+        result=TestToolsAdapter(self.root).run_once(None)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"],"tests failed")
+
+    @patch("tools.test_tools.run_test_group")
+    def test_test_adapter_rejects_runner_failure(self, run_group):
+        run_group.return_value={"ok":False,"error":"command unavailable","data":None}
+        with self.assertRaises(WorkflowError):
+            TestToolsAdapter(self.root).run_once(None)
 
 if __name__=="__main__": unittest.main()
