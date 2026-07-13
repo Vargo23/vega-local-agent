@@ -5,6 +5,11 @@ from typing import Iterable, Mapping, Tuple
 
 from core.execution_plan import ExecutionPlan, ToolCallStep
 from core.intent_analyzer import IntentAnalysis, IntentType
+from core.task_interpreter import TaskInterpretation
+from core.tool_argument_builder import (
+    ToolArgumentError,
+    build_tool_arguments,
+)
 
 
 class ToolPlanningError(ValueError):
@@ -70,7 +75,7 @@ _INTENT_ROUTES: Mapping[IntentType, Tuple[str, ...]] = {
     ),
     IntentType.DOCUMENTATION_UPDATE: (
         "git.diff",
-        "documentation.update",
+        "documentation.status",
     ),
     IntentType.RELEASE_CHECK: (
         "release.status",
@@ -105,10 +110,36 @@ def _build_capability_index(
     return capability_index
 
 
+def _resolve_required_capabilities(
+    analysis: IntentAnalysis,
+    interpretation: TaskInterpretation | None,
+) -> Tuple[str, ...]:
+    required_capabilities = _INTENT_ROUTES.get(
+        analysis.intent
+    )
+
+    if required_capabilities is None:
+        raise ToolPlanningError(
+            f"no route is defined for intent: "
+            f"{analysis.intent.value}"
+        )
+
+    if (
+        analysis.intent is IntentType.CODE_REVIEW
+        and interpretation is not None
+        and "staged_only" in interpretation.constraints
+    ):
+        return ("git.diff.cached",)
+
+    return required_capabilities
+
+
 def plan_tools(
     analysis: IntentAnalysis,
     available_tools: Iterable[ToolDescriptor],
     *,
+    interpretation: TaskInterpretation | None = None,
+    workspace: str = ".",
     max_steps: int = 8,
 ) -> ExecutionPlan:
     """Build a linear plan using only explicitly available tools."""
@@ -116,6 +147,32 @@ def plan_tools(
     if not isinstance(analysis, IntentAnalysis):
         raise TypeError(
             "analysis must be an IntentAnalysis instance"
+        )
+
+    if (
+        interpretation is not None
+        and not isinstance(
+            interpretation,
+            TaskInterpretation,
+        )
+    ):
+        raise TypeError(
+            "interpretation must be a "
+            "TaskInterpretation instance"
+        )
+
+    if (
+        interpretation is not None
+        and interpretation.intent is not analysis.intent
+    ):
+        raise ToolPlanningError(
+            "analysis and interpretation intents "
+            "must match"
+        )
+
+    if not isinstance(workspace, str) or not workspace.strip():
+        raise ToolPlanningError(
+            "workspace must be a non-empty string"
         )
 
     if max_steps < 1:
@@ -128,13 +185,12 @@ def plan_tools(
             "cannot build a tool plan for an unknown intent"
         )
 
-    required_capabilities = _INTENT_ROUTES.get(analysis.intent)
-
-    if required_capabilities is None:
-        raise ToolPlanningError(
-            f"no route is defined for intent: "
-            f"{analysis.intent.value}"
+    required_capabilities = (
+        _resolve_required_capabilities(
+            analysis,
+            interpretation,
         )
+    )
 
     capability_index = _build_capability_index(
         available_tools
@@ -161,11 +217,20 @@ def plan_tools(
         tool = capability_index[capability]
         dependencies = () if index == 1 else (index - 1,)
 
+        try:
+            arguments = build_tool_arguments(
+                capability,
+                interpretation,
+                workspace=workspace,
+            )
+        except ToolArgumentError as exc:
+            raise ToolPlanningError(str(exc)) from exc
+
         steps.append(
             ToolCallStep(
                 step_id=index,
                 tool_name=tool.name,
-                arguments={},
+                arguments=arguments,
                 required_permission=tool.permission,
                 description=(
                     tool.description
