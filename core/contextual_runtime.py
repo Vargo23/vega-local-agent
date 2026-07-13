@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from core.contextual_response import format_plan_execution_response
+from core.contextual_synthesis import (
+    ContextualChatCallable,
+    ContextualSynthesisRequest,
+    ContextualSynthesisResult,
+    synthesize_contextual_result,
+)
 from core.contextual_router import (
     ContextualRouteResult,
     ContextualRoutingError,
@@ -40,6 +46,7 @@ class ContextualRuntimeResult:
     reason: str = ""
     route_result: ContextualRouteResult | None = None
     execution_result: PlanExecutionResult | None = None
+    synthesis_result: ContextualSynthesisResult | None = None
 
     @property
     def handled(self) -> bool:
@@ -68,6 +75,8 @@ def try_execute_contextual_request(
     policy_config: (
         Mapping[str, Any] | str | Path | None
     ) = None,
+    chat_callable: ContextualChatCallable | None = None,
+    model: str = "",
 ) -> ContextualRuntimeResult:
     """
     Attempt contextual execution before model fallback.
@@ -187,16 +196,76 @@ def try_execute_contextual_request(
         ),
     }
 
+    deterministic_message = format_plan_execution_response(
+        execution_result,
+        intent=route_result.analysis.intent.value,
+    )
+    synthesis_result = None
+
+    if (
+        execution_result.status is PlanExecutionStatus.COMPLETED
+        and chat_callable is not None
+        and model.strip()
+        and route_result.analysis.intent.value
+        in {"document_analysis", "code_review"}
+        and execution_result.steps
+    ):
+        step = execution_result.steps[-1]
+        evidence = _extract_synthesis_evidence(
+            step.tool_name,
+            step.data,
+        )
+        if evidence:
+            synthesis_result = synthesize_contextual_result(
+                ContextualSynthesisRequest(
+                    original_request=normalized_text,
+                    intent=route_result.analysis.intent.value,
+                    tool_name=step.tool_name,
+                    evidence=evidence,
+                ),
+                model=model,
+                chat=chat_callable,
+            )
+
+    message = (
+        synthesis_result.response
+        if synthesis_result is not None and synthesis_result.ok
+        else deterministic_message
+    )
+
     return ContextualRuntimeResult(
         status=status_map[execution_result.status],
-        message=format_plan_execution_response(
-            execution_result,
-            intent=route_result.analysis.intent.value,
-        ),
+        message=message,
         reason=execution_result.status.value,
         route_result=route_result,
         execution_result=execution_result,
+        synthesis_result=synthesis_result,
     )
+
+
+def _extract_synthesis_evidence(
+    tool_name: str,
+    value: Any,
+) -> str:
+    data = value
+    if isinstance(data, Mapping) and "ok" in data and "data" in data:
+        if data.get("ok") is False:
+            return ""
+        data = data.get("data")
+
+    if tool_name == "read_file":
+        if not isinstance(data, Mapping):
+            return ""
+        return str(data.get("text", "")).strip()
+
+    if tool_name in {"git_diff", "git_diff_cached"}:
+        if isinstance(data, Mapping):
+            stdout = data.get("stdout", "")
+        else:
+            stdout = getattr(data, "stdout", "")
+        return str(stdout or "").strip()
+
+    return ""
 
 
 __all__ = [

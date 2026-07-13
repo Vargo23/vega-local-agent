@@ -71,7 +71,7 @@ def test_project_search_uses_available_registered_tool() -> None:
     assert plan.metadata["intent"] == "project_search"
 
 
-def test_document_analysis_builds_summary_plan() -> None:
+def test_document_analysis_builds_read_plan() -> None:
     analysis = analyze_intent(
         "\u041f\u0440\u043e\u0430\u043d\u0430"
         "\u043b\u0438\u0437\u0438\u0440\u0443\u0439 "
@@ -91,7 +91,7 @@ def test_document_analysis_builds_summary_plan() -> None:
         step.tool_name
         for step in plan.steps
     ) == (
-        "documents.summarize",
+        "documents.read",
     )
 
     assert plan.steps[0].depends_on == ()

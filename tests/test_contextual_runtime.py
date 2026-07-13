@@ -261,3 +261,137 @@ def test_actionable_invalid_request_does_not_fall_back(
     )
     assert result.handled is True
     assert "source path is required" in result.message
+
+
+def test_document_analysis_synthesizes_real_read_content(tmp_path: Path) -> None:
+    calls = []
+    registry = {
+        "read_file": lambda path: {
+            "ok": True,
+            "error": None,
+            "data": {
+                "path": path,
+                "size": 18,
+                "truncated": False,
+                "text": "Important evidence",
+            },
+        }
+    }
+    capabilities = {
+        "read_file": {
+            "permission": "READ",
+            "capabilities": ["document.read"],
+        }
+    }
+
+    def chat(model, messages):
+        calls.append((model, messages))
+        return True, "Synthesized document answer"
+
+    result = try_execute_contextual_request(
+        'Проанализируй "docs/report.md" и сделай краткий отчёт',
+        tmp_path,
+        ToolExecutor(registry),
+        registry=registry,
+        capability_config=capabilities,
+        policy_config=_policy(enabled=True),
+        chat_callable=chat,
+        model="local-model",
+    )
+    assert result.message == "Synthesized document answer"
+    assert len(calls) == 1
+    assert "Important evidence" in calls[0][1][1]["content"]
+    assert result.execution_result.steps[0].tool_name == "read_file"
+
+
+def test_code_review_synthesizes_nonempty_diff_once(tmp_path: Path) -> None:
+    calls = []
+    registry = {
+        "git_diff": lambda workspace: {
+            "stdout": "diff --git a/core/a.py b/core/a.py\n+safe change",
+            "stderr": "",
+            "returncode": 0,
+        }
+    }
+    capabilities = {
+        "git_diff": {
+            "permission": "READ",
+            "capabilities": ["git.diff"],
+        }
+    }
+    result = try_execute_contextual_request(
+        "Посмотри изменения и оцени риски",
+        tmp_path,
+        ToolExecutor(registry),
+        registry=registry,
+        capability_config=capabilities,
+        policy_config=_policy(enabled=True),
+        chat_callable=lambda model, messages: calls.append(messages) or (True, "Review answer"),
+        model="local-model",
+    )
+    assert result.message == "Review answer"
+    assert len(calls) == 1
+
+
+def test_empty_diff_and_project_search_do_not_synthesize(tmp_path: Path) -> None:
+    calls = []
+    git_registry = {
+        "git_diff": lambda workspace: {
+            "stdout": "",
+            "stderr": "",
+            "returncode": 0,
+        }
+    }
+    git_capabilities = {
+        "git_diff": {"permission": "READ", "capabilities": ["git.diff"]}
+    }
+    empty = try_execute_contextual_request(
+        "Посмотри изменения и оцени риски",
+        tmp_path,
+        ToolExecutor(git_registry),
+        registry=git_registry,
+        capability_config=git_capabilities,
+        policy_config=_policy(enabled=True),
+        chat_callable=lambda model, messages: calls.append(messages) or (True, "bad"),
+        model="local-model",
+    )
+    assert empty.message == "No unstaged changes."
+
+    search_registry = {"search_in_files": lambda **arguments: {"ok": True, "error": None, "data": []}}
+    search = try_execute_contextual_request(
+        SEARCH_REQUEST,
+        tmp_path,
+        ToolExecutor(search_registry),
+        registry=search_registry,
+        capability_config=_search_capabilities(),
+        policy_config=_policy(enabled=True),
+        chat_callable=lambda model, messages: calls.append(messages) or (True, "bad"),
+        model="local-model",
+    )
+    assert search.message == "No matches found."
+    assert calls == []
+
+
+def test_synthesis_failure_preserves_deterministic_success(tmp_path: Path) -> None:
+    registry = {
+        "read_file": lambda path: {
+            "ok": True,
+            "error": None,
+            "data": {"path": path, "size": 8, "truncated": False, "text": "Evidence"},
+        }
+    }
+    capabilities = {"read_file": {"permission": "READ", "capabilities": ["document.read"]}}
+    result = try_execute_contextual_request(
+        'Проанализируй "docs/report.md" и сделай краткий отчёт',
+        tmp_path,
+        ToolExecutor(registry),
+        registry=registry,
+        capability_config=capabilities,
+        policy_config=_policy(enabled=True),
+        chat_callable=lambda model, messages: (False, "offline"),
+        model="local-model",
+    )
+    assert result.ok
+    assert "Evidence" in result.message
+    assert result.synthesis_result is not None
+    assert not result.synthesis_result.ok

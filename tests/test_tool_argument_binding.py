@@ -49,7 +49,7 @@ def _safe_catalog() -> tuple[ToolDescriptor, ...]:
     )
 
 
-def test_document_path_is_bound_to_summary_tool() -> None:
+def test_document_path_is_bound_to_read_tool() -> None:
     analysis = analyze_intent(
         '????????????? "docs/report.pdf" '
         "? ?????? ??????? ?????"
@@ -64,7 +64,7 @@ def test_document_path_is_bound_to_summary_tool() -> None:
     )
 
     assert len(plan.steps) == 1
-    assert plan.steps[0].tool_name == "summarize_file"
+    assert plan.steps[0].tool_name == "read_file"
     assert plan.steps[0].arguments == {
         "path": "docs/report.pdf",
     }

@@ -1267,6 +1267,8 @@ def main() -> int:
                     result.intent.normalized_text,
                     context.project_root,
                     tool_executor,
+                    chat_callable=call_ollama_chat,
+                    model=context.model,
                 )
             )
 
@@ -1277,6 +1279,21 @@ def main() -> int:
                     "CONTEXTUAL",
                     contextual_result.message,
                 )
+                if contextual_result.synthesis_result is not None:
+                    context.append_message(
+                        "user",
+                        result.intent.normalized_text,
+                    )
+                    context.append_message(
+                        "assistant",
+                        contextual_result.message,
+                    )
+                    if not contextual_result.synthesis_result.ok:
+                        append_log(
+                            context.log_file,
+                            "CONTEXTUAL_SYNTHESIS_FALLBACK",
+                            contextual_result.synthesis_result.reason,
+                        )
                 continue
 
         model = load_model_name(
