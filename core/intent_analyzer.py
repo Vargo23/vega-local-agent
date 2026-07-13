@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -147,7 +147,8 @@ _RULES: Tuple[IntentRule, ...] = (
         primary_patterns=_patterns(
             r"\bдокумент\w*",
             r"\bфайл\w*",
-            r"\bpdf\b",
+            r"\b(?:document|file)\b",
+            r"\b(?:pdf|txt|md|docx|csv|json|ya?ml|toml)\b",
             r"\bотч[её]т\w*",
         ),
         secondary_patterns=_patterns(
