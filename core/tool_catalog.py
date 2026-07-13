@@ -13,6 +13,9 @@ class ToolCatalogError(ValueError):
 
 
 def _read_registry_source(registry: object) -> object:
+    if isinstance(registry, Mapping):
+        return registry
+
     list_tools = getattr(registry, "list_tools", None)
 
     if callable(list_tools):
@@ -246,3 +249,4 @@ def build_tool_catalog(
         )
 
     return tuple(descriptors)
+

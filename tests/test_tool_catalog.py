@@ -155,3 +155,17 @@ def test_load_tool_capabilities_from_json(tmp_path) -> None:
 
     assert "documents.read" in tools
     assert tools["documents.read"]["permission"] == "READ"
+
+
+def test_registered_tool_names_support_direct_mapping() -> None:
+    registry = {
+        "read_file": lambda: None,
+        "list_dir": lambda: None,
+    }
+
+    result = registered_tool_names(registry)
+
+    assert result == (
+        "list_dir",
+        "read_file",
+    )
