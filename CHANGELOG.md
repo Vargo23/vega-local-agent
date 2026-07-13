@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.7.1 - Documentation and Licensing Patch
+
+Added:
+
+* Apache License 2.0 in the root LICENSE file.
+* NOTICE file with VEGA copyright and licensing information.
+* Clear project-status, capabilities, safety-model, and licensing sections in README.md.
+
+Changed:
+
+* Runtime and documentation version updated from v2.7.0 to v2.7.1.
+* README introduction now describes VEGA as a local, safety-focused coding agent.
+* Public repository usage terms are now explicitly defined.
+
+Security:
+
+* No runtime, permission, tool-routing, workflow, or execution behavior was changed.
+* Existing fail-closed protections from v2.6.0 and v2.7.0 remain unchanged.
 ## v2.7.0 - Context-Aware Tool Orchestration
 
 Added:

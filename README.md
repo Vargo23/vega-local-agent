@@ -1,40 +1,86 @@
 # VEGA
 
-VEGA is a local project coding-agent for working with code, project structure, local tasks, and local documents.
+VEGA is a local, safety-focused coding agent for working with source code,
+project structure, development tasks, Git, local documents, and controlled tools.
+
+The project runs locally, uses Ollama models, and keeps tool execution behind
+explicit registries, argument validation, permission policies, and confirmation
+gates.
 
 ## Current version
 
+```text
+v2.7.1 - Documentation and Licensing Patch
+```
+
+The latest functional feature release is:
+
+```text
 v2.7.0 - Context-Aware Tool Orchestration
+```
 
-## Features
+## Project status
 
-* Local CLI agent
+VEGA is under active development.
+
+The current version is intended for:
+
+* local development;
+* controlled project assistance;
+* experimentation with local AI agents;
+* portfolio demonstration;
+* research into safe tool orchestration.
+
+VEGA is not currently presented as a production-ready autonomous agent.
+
+## Key capabilities
+
+* Local CLI coding agent
 * Ollama model support
-* Project-focused coding assistant
-* ASCII-only startup screen
-* Session logs
-* Task Console
-* Documents / RAG commands
-* Confirmed Patch Tools with SHA-256 verification and rollback
-* Local document indexing
-* Search over indexed documents
-* Local document analysis and summaries
-* Model profiles
-* Runtime doctor
-* Runtime status command
-* Smoke-test script
-* Local Project Memory with explicit storage and bounded model context
-* Safe Terminal Tools with predefined validation commands
-* Controlled Internet Layer with explicit session-level enablement and safe HTTPS fetching
-* Documentation Builder with policy validation, managed documents, and pending patch generation
-* Process-local Agent Modes for architecture, coding, review, debugging, teaching, and release management
-* Read-only Release Manager with policy validation, release checks, and release-notes generation
-* Agent Orchestration Foundation with deterministic routing, shared session state, runtime isolation, and an extracted Ollama client
-* Structured Command Execution with typed requests, results, and statuses
-* Controlled Tool Orchestration for the read-only `/file`, `/git`, and `/tools list` commands
-* Immutable workflow checkpoints with explicit, state-only recovery
-* Fail-closed, policy-enforced tool permissions with one-time and process-local session approval
+* Project and file analysis
+* Documents and local RAG
+* Confirmed patch application and rollback
+* Read-only Git inspection
+* Persistent project memory
+* Controlled terminal commands
+* Automated test groups
+* Controlled HTTPS access
+* Documentation and release checks
+* Coding workflows with verification and review
+* Workflow checkpoints and recovery
+* Fail-closed tool permissions
+* Context-aware natural-language tool routing
 
+## Safety model
+
+VEGA does not give the language model direct access to:
+
+* the Tool Executor;
+* registered callable tools;
+* permission or confirmation tokens;
+* unrestricted shell execution;
+* arbitrary filesystem paths;
+* automatic Git commits or publishing.
+
+Natural-language requests are converted into structured execution plans.
+Tool names and arguments are validated by VEGA before execution.
+
+Protected operations remain subject to explicit permission and confirmation
+policies. Unknown tools, invalid arguments, blocked paths, missing permission
+rules, and policy errors fail closed.
+
+## License
+
+VEGA is licensed under the Apache License, Version 2.0.
+
+See:
+
+```text
+LICENSE
+NOTICE
+```
+
+Copyright 2026 n0dflt.
 ## Requirements
 
 * Windows
@@ -141,7 +187,7 @@ python scripts\vega.py
 /q
 ```
 
-## VEGA v1.2.0 вЂ” Safe File Tools
+## VEGA v1.2.0 РІР‚вЂќ Safe File Tools
 
 VEGA provides read-only tools for listing project directories, reading bounded UTF-8
 text files, finding files, searching text, and creating deterministic file summaries.
@@ -419,7 +465,7 @@ Expected result:
 Result: OK
 ```
 
-## VEGA v1.7.0 — Safe Terminal Tools
+## VEGA v1.7.0 вЂ” Safe Terminal Tools
 
 Safe Terminal Tools execute only predefined local diagnostics, compilation, and
 automated checks. Arbitrary shell commands and user-supplied argv are not supported.
@@ -452,7 +498,7 @@ Editing the JSON policy does not bypass built-in executable and path validation.
 Dangerous executables, absolute paths, parent traversal, UNC paths, symlink escapes,
 and additional CLI arguments remain blocked.
 
-## VEGA v1.8.0 — Test Runner
+## VEGA v1.8.0 вЂ” Test Runner
 
 Test Runner executes predefined pytest groups through the Safe Terminal Tools
 layer. Arbitrary pytest arguments, custom test paths, and shell commands are
