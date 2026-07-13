@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from core.contextual_response import format_plan_execution_response
 from core.contextual_router import (
     ContextualRouteResult,
     ContextualRoutingError,
@@ -54,90 +54,6 @@ class ContextualRuntimeResult:
             self.status
             is ContextualRuntimeStatus.COMPLETED
         )
-
-
-def _format_data(
-    value: Any,
-    *,
-    max_chars: int = 4000,
-) -> tuple[str, bool]:
-    try:
-        if isinstance(value, str):
-            text = value
-        else:
-            text = json.dumps(
-                value,
-                ensure_ascii=False,
-                sort_keys=True,
-                indent=2,
-                default=str,
-            )
-    except (TypeError, ValueError):
-        text = repr(value)
-
-    if len(text) <= max_chars:
-        return text, False
-
-    return text[:max_chars] + "\n...[truncated]", True
-
-
-def _format_execution(
-    route_result: ContextualRouteResult,
-    execution_result: PlanExecutionResult,
-) -> str:
-    lines = [
-        "Contextual tool execution",
-        (
-            "Intent: "
-            f"{route_result.analysis.intent.value}"
-        ),
-        (
-            "Status: "
-            f"{execution_result.status.value.upper()}"
-        ),
-        (
-            "Completed steps: "
-            f"{len(execution_result.steps)}"
-        ),
-    ]
-
-    if execution_result.error:
-        lines.append(
-            f"Error: {execution_result.error}"
-        )
-
-    for step in execution_result.steps:
-        lines.extend(
-            [
-                "",
-                f"Step {step.step_id}",
-                f"  Tool: {step.tool_name}",
-                f"  Status: {step.status.value}",
-            ]
-        )
-
-        if step.error:
-            lines.append(
-                f"  Error: {step.error}"
-            )
-
-        if step.data is not None:
-            formatted, truncated = _format_data(
-                step.data
-            )
-
-            lines.append("  Result:")
-            lines.extend(
-                f"    {line}"
-                for line in formatted.splitlines()
-            )
-
-            if truncated:
-                lines.append(
-                    "  Output truncated: yes"
-                )
-
-    return "\n".join(lines)
 
 
 def try_execute_contextual_request(
@@ -273,9 +189,9 @@ def try_execute_contextual_request(
 
     return ContextualRuntimeResult(
         status=status_map[execution_result.status],
-        message=_format_execution(
-            route_result,
+        message=format_plan_execution_response(
             execution_result,
+            intent=route_result.analysis.intent.value,
         ),
         reason=execution_result.status.value,
         route_result=route_result,

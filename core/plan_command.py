@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from core.contextual_response import format_plan_execution_response
 from core.contextual_router import (
     ContextualRouteResult,
     ContextualRoutingError,
@@ -114,50 +115,6 @@ def _format_preview(
     return "\n".join(lines)
 
 
-def _format_execution(
-    result: PlanExecutionResult,
-) -> str:
-    lines = [
-        "Contextual plan execution",
-        f"Status: {result.status.value.upper()}",
-        f"Goal: {result.goal}",
-        f"Completed steps: {len(result.steps)}",
-    ]
-
-    if result.error:
-        lines.append(f"Error: {result.error}")
-
-    for step in result.steps:
-        lines.extend(
-            [
-                "",
-                f"Step {step.step_id}",
-                f"  Tool: {step.tool_name}",
-                f"  Status: {step.status.value}",
-            ]
-        )
-
-        if step.error:
-            lines.append(f"  Error: {step.error}")
-
-        if step.data is not None:
-            formatted, truncated = _format_value(
-                step.data
-            )
-            lines.append("  Result:")
-            lines.extend(
-                f"    {line}"
-                for line in formatted.splitlines()
-            )
-
-            if truncated:
-                lines.append(
-                    "  Output truncated: yes"
-                )
-
-    return "\n".join(lines)
-
-
 def handle_plan_command(
     command: str,
     project_root: str | Path,
@@ -257,7 +214,11 @@ def handle_plan_command(
         ),
     )
 
-    return _format_execution(execution_result)
+    return format_plan_execution_response(
+        execution_result,
+        intent=route_result.analysis.intent.value,
+        show_tools=True,
+    )
 
 
 __all__ = [

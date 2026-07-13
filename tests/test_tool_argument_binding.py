@@ -49,10 +49,10 @@ def _safe_catalog() -> tuple[ToolDescriptor, ...]:
     )
 
 
-def test_document_path_is_bound_to_both_tools() -> None:
+def test_document_path_is_bound_to_summary_tool() -> None:
     analysis = analyze_intent(
-        'Проанализируй "docs/report.pdf" '
-        "и сделай краткий отчёт"
+        '????????????? "docs/report.pdf" '
+        "? ?????? ??????? ?????"
     )
     interpretation = interpret_task(analysis)
 
@@ -63,18 +63,9 @@ def test_document_path_is_bound_to_both_tools() -> None:
         workspace="C:/project",
     )
 
-    assert tuple(
-        step.tool_name
-        for step in plan.steps
-    ) == (
-        "read_file",
-        "summarize_file",
-    )
-
+    assert len(plan.steps) == 1
+    assert plan.steps[0].tool_name == "summarize_file"
     assert plan.steps[0].arguments == {
-        "path": "docs/report.pdf",
-    }
-    assert plan.steps[1].arguments == {
         "path": "docs/report.pdf",
     }
 

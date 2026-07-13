@@ -56,7 +56,6 @@ class ToolDescriptor:
 
 _INTENT_ROUTES: Mapping[IntentType, Tuple[str, ...]] = {
     IntentType.DOCUMENT_ANALYSIS: (
-        "document.read",
         "document.summarize",
     ),
     IntentType.PROJECT_SEARCH: (

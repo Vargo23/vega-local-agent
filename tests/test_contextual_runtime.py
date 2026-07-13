@@ -164,7 +164,7 @@ def test_enabled_safe_request_executes_tool(
     assert calls[0]["path"] == str(
         tmp_path.resolve()
     )
-    assert "Status: COMPLETED" in result.message
+    assert "No matches found." in result.message
 
 
 def test_tool_reported_failure_does_not_fall_back(

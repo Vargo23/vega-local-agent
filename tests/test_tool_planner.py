@@ -71,25 +71,30 @@ def test_project_search_uses_available_registered_tool() -> None:
     assert plan.metadata["intent"] == "project_search"
 
 
-def test_document_analysis_builds_ordered_plan() -> None:
+def test_document_analysis_builds_summary_plan() -> None:
     analysis = analyze_intent(
-        "Проанализируй документ и сделай краткий отчёт"
+        "\u041f\u0440\u043e\u0430\u043d\u0430"
+        "\u043b\u0438\u0437\u0438\u0440\u0443\u0439 "
+        "\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442 "
+        "\u0438 "
+        "\u0441\u0434\u0435\u043b\u0430\u0439 "
+        "\u043a\u0440\u0430\u0442\u043a\u0438\u0439 "
+        "\u043e\u0442\u0447\u0451\u0442"
     )
 
-    plan = plan_tools(analysis, _tool_catalog())
+    plan = plan_tools(
+        analysis,
+        _tool_catalog(),
+    )
 
     assert tuple(
-        step.tool_name for step in plan.steps
+        step.tool_name
+        for step in plan.steps
     ) == (
-        "documents.read",
         "documents.summarize",
     )
+
     assert plan.steps[0].depends_on == ()
-    assert plan.steps[1].depends_on == (1,)
-    assert plan.required_permissions() == (
-        "READ",
-        "DRAFT",
-    )
 
 
 def test_bug_fix_plan_preserves_permission_levels() -> None:

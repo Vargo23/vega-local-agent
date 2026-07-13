@@ -211,7 +211,7 @@ def test_plan_run_executes_safe_tool(
     assert calls[0]["path"] == str(
         tmp_path.resolve()
     )
-    assert "Status: COMPLETED" in result
+    assert "No matches found." in result
     assert "Tool: search_in_files" in result
 
 
@@ -299,5 +299,5 @@ def test_plan_run_blocks_nonautomatic_permission(
     )
 
     assert calls == []
-    assert "Status: BLOCKED" in result
+    assert "Request blocked." in result
     assert "WRITE" in result
