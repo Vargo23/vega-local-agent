@@ -1,4 +1,4 @@
-﻿"""Deterministic slash-command routing for VEGA."""
+"""Deterministic slash-command routing for VEGA."""
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ class CommandTarget(str, Enum):
     RELEASE = "release"
     WORKFLOW = "workflow"
     PERMISSIONS = "permissions"
+    PLAN = "plan"
     EXIT = "exit"
     UNKNOWN = "unknown"
 
@@ -91,6 +92,7 @@ _DEFAULT_ROUTES = MappingProxyType(
         "/release": CommandTarget.RELEASE,
         "/workflow": CommandTarget.WORKFLOW,
         "/permissions": CommandTarget.PERMISSIONS,
+        "/plan": CommandTarget.PLAN,
         "/exit": CommandTarget.EXIT,
         "/bye": CommandTarget.EXIT,
         "/q": CommandTarget.EXIT,

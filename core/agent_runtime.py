@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """VEGA CLI shell over the Ollama HTTP chat API."""
 
 from __future__ import annotations
@@ -202,6 +202,7 @@ def help_text() -> str:
         "  /permissions grants    List active permission session grants.",
         "  /permissions revoke    Revoke one permission session grant.",
         "  /permissions clear     Clear permission session grants.",
+        "  /plan <task>           Preview contextual tool planning.",
         "",
         "Task Console:",
         "/workspace              Show workspace state",
@@ -445,6 +446,7 @@ def print_available_commands() -> None:
     print("/web")
     print("/docgen")
     print("/release")
+    print("/plan")
     print("/workflow")
     print("/exit")
 
@@ -909,6 +911,15 @@ def handle_command(
         from core.command_handler import handle_workflow_command
 
         print(handle_workflow_command(command, root))
+    elif lower == "/plan" or lower.startswith("/plan "):
+        from core.plan_command import handle_plan_command
+
+        print(
+            handle_plan_command(
+                command,
+                root,
+            )
+        )
     elif lower == "/permissions" or lower.startswith("/permissions "):
         from core.command_handler import handle_permissions_command
         if session_grants is None:

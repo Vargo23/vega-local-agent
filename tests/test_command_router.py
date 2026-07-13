@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from core.command_router import (
     CommandRouter,
@@ -139,6 +139,7 @@ class CommandRouterTests(unittest.TestCase):
             "/release",
             "/workflow",
             "/permissions",
+            "/plan",
             "/exit",
             "/bye",
             "/q",
