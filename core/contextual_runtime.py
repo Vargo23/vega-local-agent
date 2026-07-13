@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from core.context_budget import ContextBudgetResult, apply_context_budget
 from core.contextual_response import format_plan_execution_response
 from core.contextual_synthesis import (
     ContextualChatCallable,
@@ -20,6 +21,12 @@ from core.contextual_router import (
     route_contextual_request,
 )
 from core.intent_analyzer import analyze_intent
+from core.model_selection import (
+    ModelRoutingPolicyError,
+    ModelSelectionDecision,
+    load_model_routing_policy,
+    select_model,
+)
 from core.plan_executor import (
     PlanExecutionResult,
     PlanExecutionStatus,
@@ -47,6 +54,8 @@ class ContextualRuntimeResult:
     route_result: ContextualRouteResult | None = None
     execution_result: PlanExecutionResult | None = None
     synthesis_result: ContextualSynthesisResult | None = None
+    model_decision: ModelSelectionDecision | None = None
+    context_budget_result: ContextBudgetResult | None = None
 
     @property
     def handled(self) -> bool:
@@ -77,6 +86,10 @@ def try_execute_contextual_request(
     ) = None,
     chat_callable: ContextualChatCallable | None = None,
     model: str = "",
+    model_policy_config: (
+        Mapping[str, Any] | str | Path | None
+    ) = None,
+    installed_models: Sequence[str] | None = None,
 ) -> ContextualRuntimeResult:
     """
     Attempt contextual execution before model fallback.
@@ -157,6 +170,51 @@ def try_execute_contextual_request(
             reason="unsupported_intent",
         )
 
+    if model_policy_config is None:
+        project_policy = root / "config" / "model_routing_policy.json"
+        model_policy_config = (
+            project_policy
+            if project_policy.is_file()
+            else Path(__file__).resolve().parents[1]
+            / "config"
+            / "model_routing_policy.json"
+        )
+
+    try:
+        model_policy = load_model_routing_policy(model_policy_config)
+        from core.model_router import (
+            get_current_profile,
+            get_installed_ollama_models,
+            get_selection_mode,
+        )
+
+        current_profile = get_current_profile(root)["name"]
+        selection_mode = get_selection_mode(root)
+        available_models = (
+            tuple(installed_models)
+            if installed_models is not None
+            else (
+                ()
+                if model.strip()
+                else tuple(get_installed_ollama_models())
+            )
+        )
+        model_decision = select_model(
+            analysis.intent,
+            model_policy,
+            available_models,
+            selection_mode=selection_mode,
+            current_profile=current_profile,
+            explicit_model=model,
+            request_text=normalized_text,
+        )
+    except (ModelRoutingPolicyError, OSError, TypeError, ValueError) as exc:
+        return ContextualRuntimeResult(
+            status=ContextualRuntimeStatus.FAILED,
+            message=f"Contextual runtime error: {exc}",
+            reason="model_policy_error",
+        )
+
     try:
         route_result = route_contextual_request(
             normalized_text,
@@ -201,11 +259,13 @@ def try_execute_contextual_request(
         intent=route_result.analysis.intent.value,
     )
     synthesis_result = None
+    context_budget_result = None
 
     if (
         execution_result.status is PlanExecutionStatus.COMPLETED
         and chat_callable is not None
-        and model.strip()
+        and model_decision.available
+        and model_decision.model
         and route_result.analysis.intent.value
         in {"document_analysis", "code_review"}
         and execution_result.steps
@@ -216,14 +276,24 @@ def try_execute_contextual_request(
             step.data,
         )
         if evidence:
+            budget_profile = (
+                model_decision.profile
+                if model_decision.profile in model_policy.context_budgets
+                else model_policy.fallback_profile
+            )
+            context_budget_result = apply_context_budget(
+                evidence,
+                model_policy.context_budgets[budget_profile],
+                head_ratio=model_policy.head_ratio,
+            )
             synthesis_result = synthesize_contextual_result(
                 ContextualSynthesisRequest(
                     original_request=normalized_text,
                     intent=route_result.analysis.intent.value,
                     tool_name=step.tool_name,
-                    evidence=evidence,
+                    evidence=context_budget_result.evidence,
                 ),
-                model=model,
+                model=model_decision.model,
                 chat=chat_callable,
             )
 
@@ -240,6 +310,8 @@ def try_execute_contextual_request(
         route_result=route_result,
         execution_result=execution_result,
         synthesis_result=synthesis_result,
+        model_decision=model_decision,
+        context_budget_result=context_budget_result,
     )
 
 

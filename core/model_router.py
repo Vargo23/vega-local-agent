@@ -36,18 +36,58 @@ def _profile_path(project_root: Path) -> Path:
     return project_root / PROFILE_PATH
 
 
-def get_current_profile(project_root: Path) -> dict:
-    path = _profile_path(project_root)
-    profile_name = DEFAULT_PROFILE
+def _load_profile_state(project_root: Path) -> tuple[str, str]:
+    """Load profile state while preserving the legacy-file migration rule."""
 
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            candidate = data.get("current_profile", DEFAULT_PROFILE)
-            if candidate in MODEL_PROFILES:
-                profile_name = candidate
-        except (OSError, json.JSONDecodeError):
-            profile_name = DEFAULT_PROFILE
+    path = _profile_path(project_root)
+    if not path.exists():
+        return DEFAULT_PROFILE, "auto"
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_PROFILE, "auto"
+
+    if not isinstance(data, dict):
+        return DEFAULT_PROFILE, "auto"
+
+    candidate = data.get("current_profile", DEFAULT_PROFILE)
+    profile_name = (
+        candidate if candidate in MODEL_PROFILES else DEFAULT_PROFILE
+    )
+
+    # A valid v2.8 state file represented an explicit user choice.
+    if "selection_mode" not in data:
+        return profile_name, "manual"
+
+    mode = data["selection_mode"]
+    if mode not in {"auto", "manual"}:
+        mode = "auto"
+    return profile_name, mode
+
+
+def _write_profile_state(
+    project_root: Path,
+    profile_name: str,
+    selection_mode: str,
+) -> None:
+    path = _profile_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "current_profile": profile_name,
+                "selection_mode": selection_mode,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def get_current_profile(project_root: Path) -> dict:
+    profile_name, _ = _load_profile_state(project_root)
 
     profile = MODEL_PROFILES[profile_name].copy()
     profile["name"] = profile_name
@@ -59,16 +99,35 @@ def set_current_profile(project_root: Path, profile_name: str) -> dict:
     if profile_name not in MODEL_PROFILES:
         raise ValueError(f"Unknown model profile: {profile_name}")
 
-    path = _profile_path(project_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"current_profile": profile_name}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    _write_profile_state(
+        project_root,
+        profile_name,
+        "manual",
     )
 
     profile = MODEL_PROFILES[profile_name].copy()
     profile["name"] = profile_name
     return profile
+
+
+def enable_auto_selection(project_root: Path) -> dict:
+    """Enable automatic selection without changing the stored fallback."""
+
+    profile_name, _ = _load_profile_state(project_root)
+    _write_profile_state(
+        project_root,
+        profile_name,
+        "auto",
+    )
+    profile = MODEL_PROFILES[profile_name].copy()
+    profile["name"] = profile_name
+    return profile
+
+
+def get_selection_mode(project_root: Path):
+    from core.model_selection import ModelSelectionMode
+
+    return ModelSelectionMode(_load_profile_state(project_root)[1])
 
 
 def resolve_model(profile_name: str | None = None) -> str:
@@ -124,6 +183,7 @@ def get_model_install_command(model_name: str) -> str:
 
 def get_model_status(project_root: Path) -> dict:
     profile = get_current_profile(project_root)
+    selection_mode = get_selection_mode(project_root)
     model = profile["model"]
     ollama_available = is_ollama_available()
     installed_models = get_installed_ollama_models() if ollama_available else []
@@ -131,6 +191,7 @@ def get_model_status(project_root: Path) -> dict:
     return {
         "current_profile": profile["name"],
         "current_model": model,
+        "selection_mode": selection_mode.value,
         "ollama_available": ollama_available,
         "model_installed": model in installed_models,
         "install_command": get_model_install_command(model),

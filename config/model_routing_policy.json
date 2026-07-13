@@ -1,0 +1,34 @@
+{
+  "enabled": true,
+  "fallback_profile": "code",
+  "intent_profiles": {
+    "document_analysis": "docs",
+    "project_search": "fast",
+    "bug_fix": "code",
+    "test_run": "fast",
+    "code_review": "code",
+    "documentation_update": "docs",
+    "release_check": "deep",
+    "unknown": "code"
+  },
+  "fallback_order": [
+    "code",
+    "fast",
+    "docs",
+    "deep"
+  ],
+  "deep_request_chars": 20000,
+  "deep_signals": [
+    "architecture",
+    "cross-cutting",
+    "deep analysis",
+    "архитектур"
+  ],
+  "context_budgets": {
+    "fast": 4000,
+    "code": 8000,
+    "docs": 10000,
+    "deep": 12000
+  },
+  "head_ratio": 0.6
+}

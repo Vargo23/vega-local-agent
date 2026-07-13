@@ -155,7 +155,8 @@ def help_text() -> str:
         "  /help                   Show this help.",
         "  /status                 Show VEGA runtime status.",
         "  /doctor                 Run project diagnostics.",
-        "  /model                  Show current model profile.",
+        "  /model                  Show current model profile and selection mode.",
+        "  /model auto             Enable automatic contextual model selection.",
         "  /model status           Show Ollama/model status.",
         "  /model install-help     Show recommended install commands.",
         "  /docs                   Show documents help.",
@@ -349,13 +350,14 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
 
 
 def print_model_info(root: Path) -> None:
-    from core.model_router import get_current_profile, get_model_profiles
+    from core.model_router import get_model_profiles, get_model_status
 
-    current = get_current_profile(root)
+    status = get_model_status(root)
     profiles = get_model_profiles()
 
-    print(f"Current model profile: {current['name']}")
-    print(f"Current model: {current['model']}")
+    print(f"Selection mode: {status['selection_mode']}")
+    print(f"Current model profile: {status['current_profile']}")
+    print(f"Current model: {status['current_model']}")
     print("Available profiles:")
     for name, profile in profiles.items():
         print(f"  {name}  - {profile['purpose']} ({profile['model']})")
@@ -365,6 +367,7 @@ def print_model_status(root: Path) -> None:
     from core.model_router import get_model_status
 
     status = get_model_status(root)
+    print(f"Selection mode: {status['selection_mode']}")
     print(f"Current model profile: {status['current_profile']}")
     print(f"Current model: {status['current_model']}")
     print(f"Ollama available: {'YES' if status['ollama_available'] else 'NO'}")
@@ -393,7 +396,12 @@ def print_model_install_help() -> None:
 
 
 def handle_model_command(command: str, root: Path) -> None:
-    from core.model_router import get_model_profiles, get_model_status, set_current_profile
+    from core.model_router import (
+        enable_auto_selection,
+        get_model_profiles,
+        get_model_status,
+        set_current_profile,
+    )
 
     parts = command.split(maxsplit=1)
     if len(parts) == 1:
@@ -409,6 +417,13 @@ def handle_model_command(command: str, root: Path) -> None:
         print_model_install_help()
         return
 
+    if profile_name == "auto":
+        profile = enable_auto_selection(root)
+        print("Selection mode: auto")
+        print(f"Fallback model profile: {profile['name']}")
+        print(f"Fallback model: {profile['model']}")
+        return
+
     profiles = get_model_profiles()
     if profile_name not in profiles:
         print(f"Unknown model profile: {profile_name}")
@@ -416,6 +431,7 @@ def handle_model_command(command: str, root: Path) -> None:
         return
 
     profile = set_current_profile(root, profile_name)
+    print("Selection mode: manual")
     print(f"Current model profile: {profile['name']}")
     print(f"Model: {profile['model']}")
     print(f"Purpose: {profile['purpose']}")
@@ -1268,7 +1284,6 @@ def main() -> int:
                     context.project_root,
                     tool_executor,
                     chat_callable=call_ollama_chat,
-                    model=context.model,
                 )
             )
 
