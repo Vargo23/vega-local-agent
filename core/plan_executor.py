@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable
@@ -121,6 +122,44 @@ def _normalize_permissions(
     return frozenset(normalized)
 
 
+def _reported_tool_failure(data: Any) -> str:
+    """Return an error reported inside a tool result."""
+
+    if isinstance(data, Mapping):
+        if data.get("ok") is not False:
+            return ""
+
+        error = data.get("error")
+
+        if error:
+            return str(error)
+
+        return "tool reported an unsuccessful result"
+
+    try:
+        ok = getattr(data, "ok", None)
+    except Exception:
+        return ""
+
+    if ok is not False:
+        return ""
+
+    for attribute in (
+        "error",
+        "stderr",
+        "message",
+    ):
+        try:
+            value = getattr(data, attribute, "")
+        except Exception:
+            continue
+
+        if value:
+            return str(value)
+
+    return "tool reported an unsuccessful result"
+
+
 def execute_plan(
     plan: ExecutionPlan,
     executor: ToolExecutor,
@@ -216,6 +255,22 @@ def execute_plan(
                 arguments=dict(step.arguments),
             )
         )
+
+        reported_error = ""
+
+        if tool_result.ok:
+            reported_error = _reported_tool_failure(
+                tool_result.data
+            )
+
+        if reported_error:
+            tool_result = ToolExecutionResult(
+                status=ToolExecutionStatus.FAILED,
+                tool_name=tool_result.tool_name,
+                data=tool_result.data,
+                error=reported_error,
+                error_code="tool_reported_failure",
+            )
 
         step_result = (
             StepExecutionResult.from_tool_result(

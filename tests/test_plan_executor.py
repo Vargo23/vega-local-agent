@@ -236,6 +236,53 @@ def test_execution_result_serializes() -> None:
     }
 
 
+
+def test_tool_reported_failure_stops_plan() -> None:
+    calls: list[str] = []
+
+    def reported_failure() -> dict[str, object]:
+        calls.append("failure")
+        return {
+            "ok": False,
+            "error": "file could not be read",
+            "data": None,
+        }
+
+    def later() -> None:
+        calls.append("later")
+
+    plan = _plan(
+        ToolCallStep(
+            step_id=1,
+            tool_name="reported_failure",
+            required_permission="READ",
+        ),
+        ToolCallStep(
+            step_id=2,
+            tool_name="later",
+            required_permission="READ",
+            depends_on=(1,),
+        ),
+    )
+
+    result = execute_plan(
+        plan,
+        ToolExecutor(
+            {
+                "reported_failure": reported_failure,
+                "later": later,
+            }
+        ),
+    )
+
+    assert result.status is PlanExecutionStatus.FAILED
+    assert result.blocked_step_id == 1
+    assert result.steps[0].error_code == (
+        "tool_reported_failure"
+    )
+    assert "file could not be read" in result.error
+    assert calls == ["failure"]
+
 def test_invalid_executor_is_rejected() -> None:
     plan = _plan(
         ToolCallStep(
