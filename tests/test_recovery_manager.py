@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from workflows.checkpoint_models import WorkflowCheckpoint
 from workflows.checkpoint_store import CheckpointStore
+from workflows.controlled_models import ControlledWorkflowState
 from workflows.models import WorkflowRun, WorkflowStatus
 from workflows.recovery_manager import (
     RecoveryConflictError, RecoveryConfirmationError, RecoveryNotAvailableError,
@@ -61,6 +62,21 @@ class RecoveryManagerTests(unittest.TestCase):
     def test_one_safe_checkpoint_is_recoverable(self):
         cp = self.checkpoint(); result = self.manager.diagnose()
         self.assertEqual(result.state, RecoveryState.RECOVERABLE); self.assertEqual(result.checkpoint_id, cp.checkpoint_id)
+
+    def test_controlled_state_checkpoint_restores_without_execution(self):
+        state = ControlledWorkflowState.create("feature", "Sensitive task", "a" * 64)
+        state = state.evolve(
+            status=WorkflowStatus.WAITING_PATCH,
+            next_actions=("attach_patch", "cancel", "show"),
+        )
+        checkpoint = self.store.create(state, "state_transition")
+
+        result = self.manager.recover(checkpoint.checkpoint_id, "CONFIRM")
+
+        raw = json.loads((self.active / result.active_state_filename).read_text(encoding="utf-8"))
+        restored = ControlledWorkflowState.from_dict(raw)
+        self.assertEqual(restored, state)
+        self.assertNotIn("Sensitive task", json.dumps(raw))
 
     def test_multiple_checkpoint_workflows_are_ambiguous(self):
         self.checkpoint(); other = WorkflowRun.create("feature", "Other", []); self.store.create(other, "workflow_started")

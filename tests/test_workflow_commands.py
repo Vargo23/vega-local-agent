@@ -248,6 +248,43 @@ class WorkflowCommandTests(unittest.TestCase):
     def test_unknown_workflow_subcommand_keeps_help_convention(self):
         self.assertEqual(handle_workflow_command("/workflow unknown", self.root), handle_workflow_command("/workflow", self.root))
 
+    def test_exact_approve_commands_call_only_the_bound_action(self):
+        run = WorkflowRun.create("feature", "Safe", [])
+        engine = Mock()
+        engine.approve_patch.return_value = run
+        engine.approve_tests.return_value = run
+
+        handle_workflow_command(f"/workflow approve patch {WORKFLOW_ID}", self.root, engine=engine)
+        engine.approve_patch.assert_called_once_with(WORKFLOW_ID)
+        engine.approve_tests.assert_not_called()
+        engine.reset_mock()
+
+        handle_workflow_command(f"/workflow approve tests {WORKFLOW_ID}", self.root, engine=engine)
+        engine.approve_tests.assert_called_once_with(WORKFLOW_ID)
+        engine.approve_patch.assert_not_called()
+
+    def test_fuzzy_case_variant_and_malformed_commands_do_not_mutate(self):
+        engine = Mock()
+        commands = (
+            f"/workflow Approve patch {WORKFLOW_ID}",
+            f"/workflow approve Patch {WORKFLOW_ID}",
+            f"/workflow approved patch {WORKFLOW_ID}",
+            "/workflow start feature",
+            f"/workflow approve patch {WORKFLOW_ID} extra",
+            f"/workflow rollback {WORKFLOW_ID} extra",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                output = handle_workflow_command(command, self.root, engine=engine)
+                self.assertTrue("Coding Workflow commands:" in output or output.startswith("Usage:"))
+        engine.assert_not_called()
+
+    def test_model_text_containing_command_is_not_a_workflow_command(self):
+        intent = IntentRouter().route(
+            f"The model suggests /workflow approve patch {WORKFLOW_ID}, but this is prose."
+        )
+        self.assertEqual(intent.kind.value, "chat")
+
 
 if __name__ == "__main__":
     unittest.main()

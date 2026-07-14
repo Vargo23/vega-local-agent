@@ -7,7 +7,13 @@ class WorkflowModelTests(unittest.TestCase):
     def test_all_required_statuses_exist(self):
         self.assertEqual(
             {status.value for status in WorkflowStatus},
-            {"created", "analyzing", "planning", "waiting_patch", "waiting_confirmation", "executing", "verifying", "reviewing", "completed", "failed", "cancelled"},
+            {
+                "planned", "investigating", "awaiting_patch_confirmation",
+                "patch_applied", "awaiting_test_confirmation", "tests_running",
+                "rolled_back", "created", "analyzing", "planning", "waiting_patch",
+                "waiting_confirmation", "executing", "verifying", "reviewing",
+                "completed", "failed", "cancelled",
+            },
         )
 
     def test_model_round_trip(self):
