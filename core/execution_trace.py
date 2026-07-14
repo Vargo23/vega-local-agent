@@ -20,6 +20,9 @@ MAX_TRACE_CHARS = 262_144
 MAX_TRACE_STEPS = 8
 MAX_TRACE_COLLECTION_ITEMS = 8
 MAX_TRACE_FILE_BYTES = 5 * 1024 * 1024
+MAX_TRACE_BACKUPS = 5
+MAX_TRACE_SCAN_FILES = MAX_TRACE_BACKUPS + 1
+MAX_TRACE_SCAN_RECORDS = 1000
 TRACE_ENVIRONMENT_VARIABLE = "VEGA_EXECUTION_TRACE"
 TRACE_RELATIVE_PATH = Path("logs/diagnostics/execution-traces.jsonl")
 _ENABLED_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -119,6 +122,19 @@ class TraceStatus(str, Enum):
     COMPLETED = "completed"
     BLOCKED = "blocked"
     FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class TraceScanResult:
+    """Bounded result from scanning the active trace file and backups."""
+
+    traces: tuple[ExecutionTrace, ...]
+    invalid_records: int
+    files_scanned: int
+    scan_limit_reached: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "traces", tuple(self.traces))
 
 
 def _identifier(value: object, field_name: str, *, allow_empty: bool = True) -> str:
@@ -648,13 +664,42 @@ def trace_persistence_enabled(
     return isinstance(value, str) and value.strip().lower() in _ENABLED_VALUES
 
 
-def _trace_path(project_root: Path) -> Path:
+def _trace_path(project_root: Path, relative_path: Path = TRACE_RELATIVE_PATH) -> Path:
     if not isinstance(project_root, Path):
         raise TypeError("project_root must be a pathlib.Path")
-    return project_root.resolve() / TRACE_RELATIVE_PATH
+    return project_root.resolve() / relative_path
 
 
-def append_trace(project_root: Path, trace: ExecutionTrace) -> Path | None:
+def _storage_policy(project_root: Path, policy: Any = None) -> Any:
+    if policy is not None:
+        return policy
+    from core.runtime_diagnostics import DiagnosticsPolicy, load_diagnostics_policy
+
+    policy_path = project_root.resolve() / "config" / "diagnostics_policy.json"
+    if not policy_path.exists():
+        return DiagnosticsPolicy.defaults(project_root)
+    return load_diagnostics_policy(project_root)
+
+
+def _rotate_trace_store(path: Path, backup_count: int) -> None:
+    if backup_count <= 0:
+        path.unlink(missing_ok=True)
+        return
+    oldest = path.with_name(f"{path.name}.{backup_count}")
+    oldest.unlink(missing_ok=True)
+    for index in range(backup_count - 1, 0, -1):
+        source = path.with_name(f"{path.name}.{index}")
+        if source.exists():
+            source.replace(path.with_name(f"{path.name}.{index + 1}"))
+    if path.exists():
+        path.replace(path.with_name(f"{path.name}.1"))
+
+
+def append_trace(
+    project_root: Path,
+    trace: ExecutionTrace,
+    policy: Any = None,
+) -> Path | None:
     """Best-effort process-local append; tracing failures never escape."""
 
     if not trace_persistence_enabled():
@@ -662,18 +707,15 @@ def append_trace(project_root: Path, trace: ExecutionTrace) -> Path | None:
     if not isinstance(trace, ExecutionTrace) or trace.status is TraceStatus.STARTED:
         return None
     try:
+        storage = _storage_policy(project_root, policy)
         serialized = serialize_trace(trace)
         encoded = (serialized + "\n").encode("utf-8")
-        path = _trace_path(project_root)
-        backup = path.with_name(path.name + ".1")
+        path = _trace_path(project_root, Path(storage.trace_store_path))
         with _STORE_LOCK:
             path.parent.mkdir(parents=True, exist_ok=True)
             current_size = path.stat().st_size if path.exists() else 0
-            if current_size + len(encoded) > MAX_TRACE_FILE_BYTES:
-                if backup.exists():
-                    backup.unlink()
-                if path.exists():
-                    path.replace(backup)
+            if current_size + len(encoded) >= storage.max_trace_file_bytes:
+                _rotate_trace_store(path, storage.retained_trace_backups)
             with path.open("ab") as stream:
                 stream.write(encoded)
         return path
@@ -681,21 +723,67 @@ def append_trace(project_root: Path, trace: ExecutionTrace) -> Path | None:
         return None
 
 
-def load_latest_trace(project_root: Path) -> ExecutionTrace | None:
-    path = _trace_path(project_root)
+def _read_bounded_lines(path: Path, maximum_bytes: int) -> list[bytes] | None:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
+        if not path.is_file() or path.stat().st_size > maximum_bytes:
+            return None
+        return path.read_bytes().splitlines()
+    except OSError:
         return None
-    for line in reversed(lines):
-        if not line.strip():
+
+
+def scan_trace_store(
+    project_root: Path,
+    policy: Any = None,
+) -> TraceScanResult:
+    """Read recent valid traces with hard file, record, and line bounds."""
+
+    try:
+        storage = _storage_policy(project_root, policy)
+        active = _trace_path(project_root, Path(storage.trace_store_path))
+        paths = [active]
+        paths.extend(
+            active.with_name(f"{active.name}.{index}")
+            for index in range(1, storage.retained_trace_backups + 1)
+        )
+        paths = paths[: storage.max_trace_scan_files]
+    except (OSError, TypeError, ValueError):
+        return TraceScanResult((), 0, 0, False)
+
+    traces: list[ExecutionTrace] = []
+    invalid = 0
+    files_scanned = 0
+    limit_reached = False
+    for path in paths:
+        if not path.exists():
             continue
-        try:
-            value: Any = json.loads(line)
-            return ExecutionTrace.from_safe_dict(value)
-        except (json.JSONDecodeError, TraceError, TypeError, ValueError):
+        files_scanned += 1
+        lines = _read_bounded_lines(path, storage.max_trace_file_bytes)
+        if lines is None:
+            invalid += 1
             continue
-    return None
+        for raw_line in reversed(lines):
+            if len(traces) >= storage.max_trace_records:
+                limit_reached = True
+                break
+            if not raw_line.strip():
+                continue
+            if len(raw_line) > MAX_TRACE_CHARS:
+                invalid += 1
+                continue
+            try:
+                value: Any = json.loads(raw_line.decode("utf-8"))
+                traces.append(ExecutionTrace.from_safe_dict(value))
+            except (UnicodeError, json.JSONDecodeError, TraceError, TypeError, ValueError):
+                invalid += 1
+        if limit_reached:
+            break
+    return TraceScanResult(tuple(traces), invalid, files_scanned, limit_reached)
+
+
+def load_latest_trace(project_root: Path, policy: Any = None) -> ExecutionTrace | None:
+    result = scan_trace_store(project_root, policy)
+    return result.traces[0] if result.traces else None
 
 
 def format_trace_summary(trace: ExecutionTrace) -> str:
@@ -725,6 +813,9 @@ __all__ = [
     "MAX_TRACE_COLLECTION_ITEMS",
     "MAX_TRACE_CHARS",
     "MAX_TRACE_FILE_BYTES",
+    "MAX_TRACE_BACKUPS",
+    "MAX_TRACE_SCAN_FILES",
+    "MAX_TRACE_SCAN_RECORDS",
     "MAX_TRACE_STEPS",
     "TRACE_ENVIRONMENT_VARIABLE",
     "TRACE_RELATIVE_PATH",
@@ -733,6 +824,7 @@ __all__ = [
     "TraceRecorder",
     "TraceSerializationError",
     "TraceStatus",
+    "TraceScanResult",
     "TraceStep",
     "append_trace",
     "format_trace_summary",
@@ -740,6 +832,7 @@ __all__ = [
     "safe_trace_error_code",
     "safe_trace_permission",
     "safe_trace_risk",
+    "scan_trace_store",
     "serialize_trace",
     "trace_persistence_enabled",
 ]

@@ -157,6 +157,11 @@ def help_text() -> str:
         "  /help                   Show this help.",
         "  /status                 Show VEGA runtime status.",
         "  /doctor                 Run project diagnostics.",
+        "  /doctor help            Show doctor commands.",
+        "  /doctor trace status    Show bounded trace-store status.",
+        "  /doctor trace latest    Show the latest safe trace summary.",
+        "  /doctor trace summary   Show a bounded trace aggregate.",
+        "  /doctor export          Export a local diagnostics report.",
         "  /model                  Show current model profile and selection mode.",
         "  /model auto             Enable automatic contextual model selection.",
         "  /model status           Show Ollama/model status.",
@@ -502,75 +507,95 @@ def print_about() -> None:
 
 
 def handle_doctor_command(root: Path, command: str = "/doctor") -> None:
-    from core.execution_trace import (
-        TRACE_RELATIVE_PATH,
-        format_trace_summary,
-        load_latest_trace,
-        trace_persistence_enabled,
+    from core.execution_trace import format_trace_summary, load_latest_trace
+    from core.runtime_diagnostics import (
+        DiagnosticsError,
+        DiagnosticsPolicy,
+        build_runtime_diagnostics,
+        export_diagnostics_report,
+        format_diagnostics_summary,
+        format_trace_aggregate,
+        format_trace_status,
+        get_trace_store_status,
+        load_diagnostics_policy,
     )
-    from core.model_router import get_model_status
-    from rag.document_index import load_documents_index
 
-    tracing_enabled = trace_persistence_enabled()
-    latest_trace = load_latest_trace(root)
-    trace_path = root.resolve() / TRACE_RELATIVE_PATH
+    usage = "\n".join(
+        (
+            "Doctor commands:",
+            "  /doctor",
+            "  /doctor help",
+            "  /doctor trace status",
+            "  /doctor trace latest",
+            "  /doctor trace summary",
+            "  /doctor export",
+        )
+    )
+    normalized = " ".join(command.strip().lower().split())
+    if normalized == "/doctor help":
+        print(usage)
+        return
+    known = {
+        "/doctor",
+        "/doctor trace status",
+        "/doctor trace latest",
+        "/doctor trace summary",
+        "/doctor export",
+    }
+    if normalized not in known:
+        print("Unknown doctor command.")
+        print(usage)
+        return
 
-    if command.strip().lower() == "/doctor trace latest":
-        if not tracing_enabled:
+    try:
+        policy = load_diagnostics_policy(root)
+    except DiagnosticsError:
+        if not (root / "config" / "diagnostics_policy.json").exists() and normalized.startswith("/doctor trace "):
+            # Preserve the v2.10 trace-read contract for older project roots.
+            policy = DiagnosticsPolicy.defaults(root)
+        else:
+            print("Diagnostics unavailable: diagnostics_policy_error.")
+            return
+
+    if normalized == "/doctor trace latest":
+        status = get_trace_store_status(root, policy)
+        if not status.enabled:
             print("Execution tracing is disabled.")
             return
+        latest_trace = load_latest_trace(root, policy)
         if latest_trace is not None:
             print(format_trace_summary(latest_trace))
-            return
-        if trace_path.exists():
+        elif status.active_exists or status.backup_count:
             print("Latest trace record is invalid.")
         else:
             print("No execution trace is available.")
         return
 
-    documents_dir = root / "data" / "documents"
-    index_path = root / "data" / "index" / "documents_index.json"
-    smoke_test = root / "scripts" / "smoke_test.py"
-    model_status = get_model_status(root)
-    index = load_documents_index(root) if index_path.exists() else None
-    documents_count = index.get("documents_count", 0) if index else 0
-    chunks_count = index.get("chunks_count", 0) if index else 0
-    fixes: list[str] = []
+    if normalized == "/doctor trace status":
+        print(format_trace_status(get_trace_store_status(root, policy)))
+        return
 
-    if not model_status["model_installed"]:
-        fixes.append(f"Run: {model_status['install_command']}")
-    if not index_path.exists():
-        fixes.append("Run: /docs index")
-    if not documents_dir.exists():
-        fixes.append("Create folder: data\\documents")
+    if normalized == "/doctor trace summary":
+        status = get_trace_store_status(root, policy)
+        if not status.enabled:
+            print("Execution tracing is disabled.")
+            return
+        print(format_trace_aggregate(status.aggregate))
+        return
 
-    print("VEGA Doctor")
-    print(f"Version: {VERSION}")
-    print(f"Project root: {root}")
-    print(f"Ollama available: {'YES' if model_status['ollama_available'] else 'NO'}")
-    print(f"Current profile: {model_status['current_profile']}")
-    print(f"Current model: {model_status['current_model']}")
-    print(f"Model installed: {'YES' if model_status['model_installed'] else 'NO'}")
-    print(f"Documents folder: {'OK' if documents_dir.exists() else 'MISSING'}")
-    print(f"Index file: {'OK' if index_path.exists() else 'MISSING'}")
-    print(f"Documents indexed: {documents_count}")
-    print(f"Chunks indexed: {chunks_count}")
-    print(
-        "Execution trace persistence: "
-        f"{'enabled' if tracing_enabled else 'disabled'}"
-    )
-    print(
-        "Latest trace: "
-        f"{'available' if latest_trace is not None else 'unavailable'}"
-    )
-    smoke_status = "available at scripts\\smoke_test.py" if smoke_test.exists() else "MISSING"
-    print(f"Smoke test: {smoke_status}")
+    if normalized == "/doctor export":
+        try:
+            result = export_diagnostics_report(root, policy=policy)
+        except DiagnosticsError:
+            print("Diagnostics export failed: diagnostics_export_failed.")
+            return
+        print(f"Diagnostics report exported: {result.relative_path}")
+        return
 
-    if fixes:
-        print("")
-        print("Recommended fixes:")
-        for fix in fixes:
-            print(f"- {fix}")
+    try:
+        print(format_diagnostics_summary(build_runtime_diagnostics(root, policy=policy)))
+    except DiagnosticsError:
+        print("Diagnostics unavailable: diagnostics_build_failed.")
 
 
 UNKNOWN_COMMAND_HINTS = {
