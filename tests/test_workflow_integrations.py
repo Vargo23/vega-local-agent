@@ -19,6 +19,7 @@ class ProductionIntegrationTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup); self.root=Path(self.temp.name)
         (self.root/"config").mkdir()
         shutil.copy(Path(__file__).parents[1]/"config/checkpoint_policy.json",self.root/"config/checkpoint_policy.json")
+        shutil.copy(Path(__file__).parents[1]/"config/permission_policy.json",self.root/"config/permission_policy.json")
         (self.root/"sample.txt").write_text("before\n",encoding="utf-8")
         self.root_patches=[patch("core.safety.get_project_root",return_value=self.root),patch("tools.patch_tools.get_project_root",return_value=self.root)]
         for item in self.root_patches: item.start(); self.addCleanup(item.stop)
@@ -34,7 +35,7 @@ class ProductionIntegrationTests(unittest.TestCase):
         engine=WorkflowEngine(self.root,default_registry(),patch_tools=PatchToolsAdapter(),test_tools=Verifier(),review_tools=PassReviewTools())
         engine.start("feature","Implement export")
         attached=engine.attach_patch(patch_id)
-        self.assertEqual(attached.status,WorkflowStatus.WAITING_CONFIRMATION)
+        self.assertEqual(attached.status,WorkflowStatus.AWAITING_PATCH_CONFIRMATION)
         self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"before\n")
     def test_attach_rejects_unknown_and_applied_patch(self):
         from tools.patch_tools import apply_patch,propose_patch
@@ -50,10 +51,14 @@ class ProductionIntegrationTests(unittest.TestCase):
         self.assertTrue(proposal["ok"]); patch_id=proposal["data"]["patch_id"]
         verifier=Verifier(); engine=WorkflowEngine(self.root,default_registry(),confirmation_manager=ConfirmationManager(),patch_tools=PatchToolsAdapter(),test_tools=verifier,review_tools=PassReviewTools())
         waiting=engine.start("feature","Implement export",patch_id=patch_id)
-        self.assertEqual(waiting.status,WorkflowStatus.WAITING_CONFIRMATION)
+        self.assertEqual(waiting.status,WorkflowStatus.AWAITING_PATCH_CONFIRMATION)
+        awaiting_tests=engine.confirm()
+        self.assertEqual(awaiting_tests.status,WorkflowStatus.AWAITING_TEST_CONFIRMATION)
+        self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"after\n")
+        self.assertEqual(verifier.runs,0)
         completed=engine.confirm()
-        self.assertEqual(completed.status,WorkflowStatus.COMPLETED); self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"after\n")
-        self.assertEqual(verifier.runs,1); self.assertIn("sample.txt",completed.report)
+        self.assertEqual(completed.status,WorkflowStatus.COMPLETED)
+        self.assertEqual(verifier.runs,1)
         with self.assertRaises(Exception): engine.confirm()
         self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"after\n")
     def test_legacy_patch_shortcut_remains_confirmation_gated(self):
@@ -61,7 +66,7 @@ class ProductionIntegrationTests(unittest.TestCase):
         proposal=propose_patch("sample.txt","after\n","legacy shortcut"); patch_id=proposal["data"]["patch_id"]
         engine=WorkflowEngine(self.root,default_registry(),patch_tools=PatchToolsAdapter(),test_tools=Verifier(),review_tools=PassReviewTools())
         run=engine.start("feature","Implement export",patch_id=patch_id)
-        self.assertEqual(run.status,WorkflowStatus.WAITING_CONFIRMATION)
+        self.assertEqual(run.status,WorkflowStatus.AWAITING_PATCH_CONFIRMATION)
         self.assertEqual((self.root/"sample.txt").read_text(encoding="utf-8"),"before\n")
 
     @patch("tools.test_tools.run_test_group")

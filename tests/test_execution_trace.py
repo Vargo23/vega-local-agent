@@ -18,6 +18,7 @@ from core.execution_trace import (
     TraceSerializationError,
     TraceStatus,
     TraceStep,
+    WorkflowTraceDecision,
     append_trace,
     load_latest_trace,
     safe_trace_error_code,
@@ -128,6 +129,32 @@ def test_safe_serialization_omits_sensitive_values() -> None:
     rendered = repr(trace) + repr(trace.to_safe_dict()) + serialize_trace(trace)
 
     assert all(value not in rendered for value in sentinels)
+
+
+def test_workflow_decision_trace_round_trips_without_payloads() -> None:
+    decision = WorkflowTraceDecision(
+        workflow_id="workflow-" + "1" * 32,
+        workflow_type="bug-fix",
+        stage="awaiting_test_confirmation",
+        action="test_execution",
+        outcome="awaiting_confirmation",
+        iteration_count=1,
+        confirmation_required=True,
+        workspace_drift=False,
+        rollback_available=True,
+        error_codes=(),
+    )
+    trace = ExecutionTrace(
+        "workflow-trace", "workflow", intent="bug-fix", domain="coding",
+        confirmation_required=True, status=TraceStatus.BLOCKED,
+        workflow_decision=decision,
+    )
+
+    rendered = serialize_trace(trace)
+    restored = ExecutionTrace.from_safe_dict(json.loads(rendered))
+
+    assert restored == trace
+    assert "task" not in rendered and "diff" not in rendered and "stdout" not in rendered
 
 
 def test_safe_serialization_uses_allowlisted_fields_only() -> None:

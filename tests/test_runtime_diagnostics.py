@@ -17,6 +17,7 @@ from core.runtime_diagnostics import (
     DiagnosticsSerializationError,
     RuntimeDiagnosticsReport,
     build_runtime_diagnostics,
+    _build_workflows,
     export_diagnostics_report,
     get_trace_store_status,
     load_diagnostics_policy,
@@ -192,6 +193,7 @@ def test_report_is_immutable_allowlisted_and_deterministic(tmp_path: Path) -> No
         "terminal_policy",
         "execution_traces",
         "local_state",
+        "controlled_workflows",
         "runtime_files",
     }
     first = serialize_diagnostics_report(report)
@@ -282,4 +284,35 @@ def test_export_size_failure_leaves_no_partial_file(tmp_path: Path) -> None:
 
     reports = tmp_path / policy.doctor_reports_dir
     assert not reports.exists()
+
+
+def test_workflow_diagnostics_are_payload_free_and_read_only(tmp_path: Path) -> None:
+    from workflows.controlled_models import ControlledWorkflowState
+
+    state = ControlledWorkflowState.create("feature", "TOP-SECRET-WORKFLOW-TASK", "a" * 64)
+    state = state.evolve(status="waiting_patch", next_actions=("attach_patch", "cancel", "show"))
+    active = tmp_path / "data" / "workflows" / "active"
+    active.mkdir(parents=True)
+    path = active / f"{state.workflow_id}.json"
+    path.write_text(json.dumps(state.to_dict()), encoding="utf-8")
+    before = path.read_bytes()
+
+    status = _build_workflows(tmp_path)
+
+    rendered = repr(status) + repr(status.to_safe_dict())
+    assert status.active_count == 1
+    assert status.stage == "waiting_patch"
+    assert "TOP-SECRET-WORKFLOW-TASK" not in rendered
+    assert path.read_bytes() == before
+
+
+def test_workflow_diagnostics_fail_closed_on_unknown_state_file(tmp_path: Path) -> None:
+    active = tmp_path / "data" / "workflows" / "active"
+    active.mkdir(parents=True)
+    (active / "unknown.json").write_text("{}", encoding="utf-8")
+
+    status = _build_workflows(tmp_path)
+
+    assert status.status == "degraded"
+    assert status.error_codes == ("workflow_state_invalid",)
 

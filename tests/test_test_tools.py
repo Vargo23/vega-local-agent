@@ -24,13 +24,14 @@ class TestToolsTests(unittest.TestCase):
                 {"id": "tests-web-commands", "enabled": True},
                 {"id": "tests-web-cli", "enabled": True},
                 {"id": "tests-docs", "enabled": True},
+                {"id": "tests-workflow", "enabled": True},
             ],
         }
 
         result = list_test_groups()
 
         self.assertTrue(result["ok"], result["error"])
-        self.assertEqual(len(result["data"]), 9)
+        self.assertEqual(len(result["data"]), 10)
         self.assertTrue(
             all(item["available"] for item in result["data"])
         )
