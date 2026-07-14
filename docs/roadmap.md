@@ -5,13 +5,13 @@
 Current stable release:
 
 ```text
-v2.10.0 - Production Reliability and Execution Traces
+v2.11.0 - Runtime Diagnostics Evolution
 ```
 
-Previous functional release:
+Previous stable release:
 
 ```text
-v2.9.0 - Model Selection and Context Optimization
+v2.10.0 - Production Reliability and Execution Traces
 ```
 
 Previous extension API release:
@@ -20,14 +20,15 @@ Previous extension API release:
 v2.8.0 - Plugin and Domain API
 ```
 
-Next planned stabilization:
+Next planned release:
 
 ```text
-v2.11.0 - Runtime Diagnostics Evolution
+TBD
 ```
 
-v2.10 completes the cross-layer reliability plan without adding autonomous
-execution, a marketplace, telemetry export, or a new interface.
+v2.11 is implemented and release-validated. It adds bounded local runtime
+diagnostics without autonomous execution, a marketplace, remote telemetry, or a
+new interface.
 
 ## v0.1 — стабильная база
 
@@ -240,3 +241,20 @@ The executable design and acceptance criteria are in
 monitoring, autonomous tool execution, a marketplace, or automatic publishing.
 Confirmation-only `bug_fix` and `test_run` routes remain intentionally outside
 the automatic contextual catalog and are reported as nonblocking warnings.
+
+## v2.11.0 release status
+
+Status: `implemented and release-validated`
+
+Implemented in `feature/v2.11-runtime-diagnostics`:
+
+* strict bounded diagnostics policy;
+* immutable payload-free runtime reports;
+* explicit atomic `/doctor export` and bounded report retention;
+* `/doctor trace status`, compatible latest summary, and bounded aggregate;
+* configurable three-backup trace rotation and active/backup scanning; and
+* v2.10 trace compatibility, security regressions, and synchronized release
+  identity.
+
+See [`docs/v2.11-architecture.md`](v2.11-architecture.md). The next release scope
+is `TBD`.

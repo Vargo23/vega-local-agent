@@ -4,6 +4,53 @@
 
 No unreleased changes.
 
+## v2.11.0 - Runtime Diagnostics Evolution
+
+Added:
+
+* A strict immutable `schema_version: 1` diagnostics policy with confined
+  project-relative paths and hard resource caps.
+* Immutable allowlisted runtime reports covering production snapshot, model,
+  documents/RAG, project memory, terminal policy, trace store, and release files.
+* Explicit atomic `/doctor export`, bounded report retention, `/doctor trace
+  status`, and `/doctor trace summary`.
+
+Changed:
+
+* Trace rotation now retains three configurable backups by default while keeping
+  the 5 MiB active-file ceiling.
+* Latest-trace lookup and aggregation scan active and backup files with bounded
+  file, line, record, and collection limits; valid v2.10 records remain readable.
+* `/doctor` uses the shared runtime diagnostics API without changing the single
+  `PlanExecutor -> ToolExecutor` execution path.
+
+Security:
+
+* Reports and traces use manual allowlist serialization and fixed error codes;
+  prompts, user text, evidence, tool payloads/results, command output, secrets,
+  absolute user paths, exception text, and tracebacks are excluded.
+* Policy rejects unknown/duplicate fields, wrong types, absolute paths, parent
+  traversal, blocked directories, symlink escape, and limits above hard caps.
+* Export is explicit, same-directory atomic, local-only, path-confined, and never
+  enables tools or changes permission, routing, model, synthesis, or results.
+
+Testing:
+
+* Added policy, immutable report, secret-sentinel, trace rotation/scan,
+  aggregation, export retention/atomicity, CLI compatibility, Git-ignore, and
+  release identity regressions.
+
+Documentation:
+
+* Added the v2.11 architecture and permanent release notes; synchronized README,
+  architecture, commands, security, roadmap, and release policy.
+
+Known limitations:
+
+* Trace persistence remains opt-in, reports are local-only, locking is
+  process-local rather than interprocess-safe, and remote telemetry and automatic
+  publishing are not provided.
+
 ## v2.10.0 - Production Reliability and Execution Traces
 
 Added:

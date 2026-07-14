@@ -65,7 +65,8 @@ logs/terminal/
 
 # Opt-in bounded execution diagnostics
 logs/diagnostics/execution-traces.jsonl
-logs/diagnostics/execution-traces.jsonl.1
+logs/diagnostics/execution-traces.jsonl.*
+logs/diagnostics/reports/
 
 # Runtime web audit logs
 logs/web/*.jsonl
