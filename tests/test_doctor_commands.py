@@ -12,7 +12,7 @@ def _policy(root: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "trace_store_path": "logs/diagnostics/execution-traces.jsonl",
                 "max_trace_file_bytes": 5242880,
                 "retained_trace_backups": 3,
@@ -21,6 +21,10 @@ def _policy(root: Path) -> None:
                 "doctor_reports_dir": "logs/diagnostics/reports",
                 "max_doctor_report_bytes": 524288,
                 "retained_doctor_reports": 3,
+                "lock_timeout_ms": 500,
+                "stale_temp_age_seconds": 3600,
+                "max_state_scan_files": 64,
+                "retained_quarantine_files": 10,
             }
         ),
         encoding="utf-8",
@@ -37,6 +41,8 @@ def test_doctor_help_lists_exact_commands(tmp_path: Path, capsys) -> None:
         "/doctor trace status",
         "/doctor trace latest",
         "/doctor trace summary",
+        "/doctor state status",
+        "/doctor state repair",
         "/doctor export",
     ):
         assert command in output
