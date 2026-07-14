@@ -103,6 +103,23 @@ From project root:
 python scripts\vega.py
 ```
 
+To install or refresh the user-level `vega` command on Windows, run the
+installer from the canonical checkout:
+
+```bat
+python scripts\install_windows_launcher.py
+```
+
+The installer creates `%USERPROFILE%\vega-bin\vega.cmd`, backs up an outdated
+wrapper, and adds that directory to the user PATH only when it is missing. The
+global wrapper delegates to this checkout's `vega.cmd`; it does not contain a
+version number, Python selection logic, or Git branch switching. Launcher
+resolution can be inspected without starting the interactive UI:
+
+```bat
+python scripts\diagnose_windows_launcher.py
+```
+
 ## Commands
 
 ```text
