@@ -55,6 +55,7 @@ _MODEL_REASON_CODES = frozenset(
         "",
         "deep_request_policy",
         "explicit_override",
+        "explicit_model_unavailable",
         "fallback_profile",
         "installed_model_fallback",
         "intent_profile",
@@ -83,6 +84,7 @@ _ERROR_CODES = frozenset(
         "trace_recording_failed",
         "tool_execution_failed",
         "tool_reported_failure",
+        "tool_signature_invalid",
         "tool_unregistered",
         "unknown_tool",
     }

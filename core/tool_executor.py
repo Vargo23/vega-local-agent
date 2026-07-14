@@ -149,32 +149,32 @@ class ToolExecutor:
 
         try:
             signature = inspect.signature(tool)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError):
             return ToolExecutionResult(
                 status=ToolExecutionStatus.FAILED,
                 tool_name=request.tool_name,
-                error=(
-                    "Tool signature inspection failed: "
-                    f"{type(exc).__name__}: {exc}"
-                ),
+                error="Tool could not be validated safely.",
+                error_code="tool_signature_invalid",
             )
 
         try:
             signature.bind(**request.arguments)
-        except TypeError as exc:
+        except TypeError:
             return ToolExecutionResult(
                 status=ToolExecutionStatus.INVALID_ARGUMENTS,
                 tool_name=request.tool_name,
-                error=f"TypeError: {exc}",
+                error="Tool arguments are invalid.",
+                error_code="invalid_arguments",
             )
 
         try:
             data = tool(**request.arguments)
-        except Exception as exc:
+        except Exception:
             return ToolExecutionResult(
                 status=ToolExecutionStatus.FAILED,
                 tool_name=request.tool_name,
-                error=f"{type(exc).__name__}: {exc}",
+                error="Tool execution failed.",
+                error_code="tool_execution_failed",
             )
 
         return ToolExecutionResult(
@@ -230,14 +230,11 @@ class ToolExecutor:
                 ),
                 error_code="permission_policy_error",
             )
-        except Exception as exc:
+        except Exception:
             return ToolExecutionResult(
                 ToolExecutionStatus.FAILED,
                 request.tool_name,
-                error=(
-                    "Permission evaluation failed: "
-                    f"{type(exc).__name__}: {exc}"
-                ),
+                error="Permission evaluation failed closed.",
                 error_code="permission_policy_error",
             )
 

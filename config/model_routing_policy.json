@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "enabled": true,
   "fallback_profile": "code",
   "intent_profiles": {

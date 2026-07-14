@@ -5,6 +5,7 @@ import pytest
 from core.contextual_router import (
     ContextualRoutingDisabled,
     ContextualRoutingError,
+    parse_tool_routing_policy,
     route_contextual_request,
 )
 from tools.registry import TOOL_REGISTRY
@@ -37,7 +38,9 @@ def _document_capabilities() -> dict[str, object]:
 
 def _policy(*, enabled: bool) -> dict[str, object]:
     return {
+        "schema_version": 1,
         "enabled": enabled,
+        "allow_explicit_execution": True,
         "automatic_permissions": [
             "READ",
             "DRAFT",
@@ -174,6 +177,27 @@ def test_unsafe_policy_options_are_rejected() -> None:
             _search_capabilities(),
             policy,
         )
+
+
+@pytest.mark.parametrize("schema_version", (None, True, 0, 2))
+def test_routing_policy_rejects_invalid_schema_version(schema_version) -> None:
+    policy = _policy(enabled=True)
+    policy["schema_version"] = schema_version
+
+    with pytest.raises(ContextualRoutingError, match="schema_version"):
+        parse_tool_routing_policy(policy)
+
+
+def test_routing_policy_rejects_missing_and_unknown_fields() -> None:
+    missing = _policy(enabled=True)
+    missing.pop("fail_closed")
+    unknown = _policy(enabled=True)
+    unknown["payload"] = "TOP-SECRET"
+
+    with pytest.raises(ContextualRoutingError, match="missing"):
+        parse_tool_routing_policy(missing)
+    with pytest.raises(ContextualRoutingError, match="unknown"):
+        parse_tool_routing_policy(unknown)
 
 
 def test_production_preview_uses_real_registry() -> None:

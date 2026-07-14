@@ -19,7 +19,9 @@ def _orchestrator(root: Path) -> SimpleNamespace:
 
 def _policy() -> dict[str, object]:
     return {
+        "schema_version": 1,
         "enabled": False,
+        "allow_explicit_execution": False,
         "automatic_permissions": [
             "READ",
             "DRAFT",

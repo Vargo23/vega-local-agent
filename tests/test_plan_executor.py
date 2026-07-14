@@ -179,7 +179,8 @@ def test_execution_stops_after_first_failure() -> None:
     assert result.blocked_step_id == 1
     assert len(result.steps) == 1
     assert result.steps[0].ok is False
-    assert "controlled failure" in result.error
+    assert result.error == "step 1 failed: Tool execution failed."
+    assert result.steps[0].error_code == "tool_execution_failed"
     assert calls == ["failing"]
 
 
@@ -209,7 +210,8 @@ def test_invalid_arguments_are_reported() -> None:
     assert result.steps[0].status.value == (
         "invalid_arguments"
     )
-    assert "TypeError" in result.error
+    assert result.error == "step 1 failed: Tool arguments are invalid."
+    assert result.steps[0].error_code == "invalid_arguments"
 
 
 def test_execution_result_serializes() -> None:
@@ -285,7 +287,8 @@ def test_tool_reported_failure_stops_plan() -> None:
     assert result.steps[0].error_code == (
         "tool_reported_failure"
     )
-    assert "file could not be read" in result.error
+    assert result.error == "step 1 failed: Tool reported an unsuccessful result."
+    assert "file could not be read" not in repr(result)
     assert calls == ["failure"]
 
 def test_invalid_executor_is_rejected() -> None:

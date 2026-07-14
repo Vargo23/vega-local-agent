@@ -87,23 +87,30 @@ def synthesize_contextual_result(
     messages, evidence_truncated = build_synthesis_messages(request)
     try:
         ok, response = chat(model, messages)
-    except Exception as exc:
+    except Exception:
         return ContextualSynthesisResult(
             ContextualSynthesisStatus.FAILED,
-            reason=f"{type(exc).__name__}: {exc}",
+            reason="model_call_failed",
             evidence_truncated=evidence_truncated,
         )
     if not ok:
         return ContextualSynthesisResult(
             ContextualSynthesisStatus.FAILED,
-            reason=str(response or "model unavailable"),
+            reason="model_unavailable",
             evidence_truncated=evidence_truncated,
         )
-    text = str(response or "").strip()
+    try:
+        text = str(response or "").strip()
+    except Exception:
+        return ContextualSynthesisResult(
+            ContextualSynthesisStatus.FAILED,
+            reason="invalid_model_response",
+            evidence_truncated=evidence_truncated,
+        )
     if not text:
         return ContextualSynthesisResult(
             ContextualSynthesisStatus.FAILED,
-            reason="empty model response",
+            reason="empty_model_response",
             evidence_truncated=evidence_truncated,
         )
     text, _ = _truncate(text, MAX_SYNTHESIS_OUTPUT_CHARS)

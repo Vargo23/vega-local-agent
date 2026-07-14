@@ -102,6 +102,16 @@ def test_valid_builtin_metadata_has_no_issues() -> None:
     assert report.summary == "fatal=0; degraded=0; warning=0"
 
 
+def test_intentionally_inactive_route_is_a_nonblocking_warning() -> None:
+    report = validate(active_intents=())
+
+    assert report.fatal_issues == ()
+    assert report.degraded_issues == ()
+    assert {issue.code for issue in report.warnings} == {
+        PolicyIssueCode.INACTIVE_INTENT_ROUTE
+    }
+
+
 def test_issue_and_report_are_immutable_and_deterministic() -> None:
     first = PolicyConsistencyIssue(
         PolicyIssueCode.TOOL_MISSING,

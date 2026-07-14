@@ -146,12 +146,7 @@ def _reported_tool_failure(data: Any) -> str:
         if data.get("ok") is not False:
             return ""
 
-        error = data.get("error")
-
-        if error:
-            return str(error)
-
-        return "tool reported an unsuccessful result"
+        return "Tool reported an unsuccessful result."
 
     try:
         ok = getattr(data, "ok", None)
@@ -160,21 +155,7 @@ def _reported_tool_failure(data: Any) -> str:
 
     if ok is not False:
         return ""
-
-    for attribute in (
-        "error",
-        "stderr",
-        "message",
-    ):
-        try:
-            value = getattr(data, attribute, "")
-        except Exception:
-            continue
-
-        if value:
-            return str(value)
-
-    return "tool reported an unsuccessful result"
+    return "Tool reported an unsuccessful result."
 
 
 def execute_plan(
@@ -330,7 +311,7 @@ def execute_plan(
             tool_result = ToolExecutionResult(
                 status=ToolExecutionStatus.FAILED,
                 tool_name=tool_result.tool_name,
-                data=tool_result.data,
+                data=None,
                 error=reported_error,
                 error_code="tool_reported_failure",
             )

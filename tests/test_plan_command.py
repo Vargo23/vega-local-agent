@@ -17,6 +17,7 @@ def _policy(
     allow_explicit_execution: bool = False,
 ) -> dict[str, object]:
     return {
+        "schema_version": 1,
         "enabled": False,
         "allow_explicit_execution": (
             allow_explicit_execution

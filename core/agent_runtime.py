@@ -315,8 +315,12 @@ def print_status(root: Path, log_file: Path, model: str) -> None:
     try:
         from memory.project_memory import get_memory_stats
         memory_result = get_memory_stats(root)
-    except Exception as exc:
-        memory_result = {"ok": False, "error": str(exc), "data": None}
+    except Exception:
+        memory_result = {
+            "ok": False,
+            "error": "Project Memory is unavailable.",
+            "data": None,
+        }
 
     print("# VEGA status")
     print("")
@@ -1424,10 +1428,10 @@ def main() -> int:
             memory_result = build_memory_context(
                 context.project_root
             )
-        except Exception as exc:
+        except Exception:
             memory_result = {
                 "ok": False,
-                "error": str(exc),
+                "error": "Project Memory is unavailable.",
                 "data": None,
             }
 

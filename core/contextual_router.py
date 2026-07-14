@@ -31,6 +31,22 @@ class ContextualRoutingDisabled(ContextualRoutingError):
     """Raised when contextual routing is disabled by policy."""
 
 
+SUPPORTED_ROUTING_SCHEMA_VERSION = 1
+_ROUTING_POLICY_FIELDS = frozenset(
+    {
+        "schema_version",
+        "enabled",
+        "allow_explicit_execution",
+        "automatic_permissions",
+        "confirmation_permissions",
+        "max_tool_steps",
+        "allow_arbitrary_tool_names",
+        "allow_shell_generation",
+        "fail_closed",
+    }
+)
+
+
 @dataclass(frozen=True)
 class ToolRoutingPolicy:
     """Validated policy controlling contextual tool routing."""
@@ -180,7 +196,26 @@ def parse_tool_routing_policy(
             "routing policy data must be a mapping"
         )
 
-    max_tool_steps = data.get("max_tool_steps", 8)
+    fields = set(data)
+    missing = _ROUTING_POLICY_FIELDS - fields
+    unknown = fields - _ROUTING_POLICY_FIELDS
+    if missing:
+        raise ContextualRoutingError(
+            "missing routing policy fields: " + ", ".join(sorted(missing))
+        )
+    if unknown:
+        raise ContextualRoutingError(
+            "unknown routing policy fields: " + ", ".join(sorted(unknown))
+        )
+    if (
+        type(data["schema_version"]) is not int
+        or data["schema_version"] != SUPPORTED_ROUTING_SCHEMA_VERSION
+    ):
+        raise ContextualRoutingError(
+            "unsupported routing policy schema_version"
+        )
+
+    max_tool_steps = data["max_tool_steps"]
 
     if (
         not isinstance(max_tool_steps, int)
@@ -242,7 +277,7 @@ def load_tool_routing_policy(
 
     if not path.is_file():
         raise ContextualRoutingError(
-            f"routing policy does not exist: {path}"
+            "routing policy does not exist"
         )
 
     try:
@@ -250,7 +285,7 @@ def load_tool_routing_policy(
         data = json.loads(content)
     except (OSError, json.JSONDecodeError) as exc:
         raise ContextualRoutingError(
-            f"cannot read routing policy: {path}"
+            "cannot read routing policy"
         ) from exc
 
     if not isinstance(data, Mapping):

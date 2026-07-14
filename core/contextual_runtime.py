@@ -17,7 +17,6 @@ from core.contextual_synthesis import (
 )
 from core.contextual_router import (
     ContextualRouteResult,
-    ContextualRoutingError,
     load_tool_routing_policy,
     route_contextual_request,
 )
@@ -29,7 +28,6 @@ from core.execution_trace import (
 )
 from core.intent_analyzer import analyze_intent
 from core.model_selection import (
-    ModelRoutingPolicyError,
     ModelSelectionDecision,
     load_model_routing_policy,
     select_model,
@@ -173,15 +171,23 @@ def try_execute_contextual_request(
         policy_config = production_snapshot.routing_policy
         model_policy_config = production_snapshot.model_routing_policy
 
-    root = Path(project_root).resolve()
+    try:
+        root = Path(project_root).resolve()
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return ContextualRuntimeResult(
+            status=ContextualRuntimeStatus.FAILED,
+            message="Contextual runtime could not validate the project root.",
+            reason="invalid_project_root",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "invalid_project_root",
+            ),
+        )
 
     if not root.is_dir():
         return ContextualRuntimeResult(
             status=ContextualRuntimeStatus.FAILED,
-            message=(
-                "Contextual runtime error: "
-                f"project root is not a directory: {root}"
-            ),
+            message="Contextual runtime could not validate the project root.",
             reason="invalid_project_root",
             execution_trace=finish_trace(
                 TraceStatus.FAILED,
@@ -219,13 +225,10 @@ def try_execute_contextual_request(
         policy = load_tool_routing_policy(
             policy_config
         )
-    except ContextualRoutingError as exc:
+    except Exception:
         return ContextualRuntimeResult(
             status=ContextualRuntimeStatus.FAILED,
-            message=(
-                "Contextual runtime error: "
-                f"{exc}"
-            ),
+            message="Contextual routing policy could not be validated.",
             reason="policy_error",
             execution_trace=finish_trace(
                 TraceStatus.FAILED,
@@ -239,7 +242,18 @@ def try_execute_contextual_request(
             reason="disabled_by_policy",
         )
 
-    analysis = analyze_intent(normalized_text)
+    try:
+        analysis = analyze_intent(normalized_text)
+    except Exception:
+        return ContextualRuntimeResult(
+            status=ContextualRuntimeStatus.FAILED,
+            message="The request could not be analyzed safely.",
+            reason="intent_analysis_failed",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "intent_analysis_failed",
+            ),
+        )
 
     if not analysis.is_actionable:
         return ContextualRuntimeResult(
@@ -314,10 +328,10 @@ def try_execute_contextual_request(
             )
         except Exception:
             note_trace_recording_failure()
-    except (ModelRoutingPolicyError, OSError, TypeError, ValueError) as exc:
+    except Exception:
         return ContextualRuntimeResult(
             status=ContextualRuntimeStatus.FAILED,
-            message=f"Contextual runtime error: {exc}",
+            message="Model routing could not be validated.",
             reason="model_policy_error",
             execution_trace=finish_trace(
                 TraceStatus.FAILED,
@@ -334,13 +348,10 @@ def try_execute_contextual_request(
             workspace=root,
             preview=False,
         )
-    except ContextualRoutingError as exc:
+    except Exception:
         return ContextualRuntimeResult(
             status=ContextualRuntimeStatus.FAILED,
-            message=(
-                "Contextual runtime error: "
-                f"{exc}"
-            ),
+            message="The request could not be planned safely.",
             reason="routing_error",
             execution_trace=finish_trace(
                 TraceStatus.FAILED,

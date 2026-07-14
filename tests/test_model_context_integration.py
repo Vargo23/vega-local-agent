@@ -7,6 +7,7 @@ from core.tool_executor import ToolExecutor
 
 def _tool_policy() -> dict[str, object]:
     return {
+        "schema_version": 1,
         "enabled": True,
         "allow_explicit_execution": True,
         "automatic_permissions": ["READ", "DRAFT"],

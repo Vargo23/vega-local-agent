@@ -77,7 +77,7 @@ def test_failure_exception_and_empty_response_fail_closed():
         request(), model="local-model", chat=raises
     )
     assert result.status is ContextualSynthesisStatus.FAILED
-    assert "RuntimeError" in result.reason
+    assert result.reason == "model_call_failed"
 
 
 def test_output_is_bounded():

@@ -305,7 +305,7 @@ def validate_policy_consistency(
                 PolicyIssueCode.INACTIVE_INTENT_ROUTE,
                 "routing",
                 intent,
-                severity=PolicyIssueSeverity.DEGRADED,
+                severity=PolicyIssueSeverity.WARNING,
                 message="The planner route is unavailable to automatic contextual routing.",
             )
             continue

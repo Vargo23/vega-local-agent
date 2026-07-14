@@ -35,6 +35,7 @@ def _policy(
     enabled: bool,
 ) -> dict[str, object]:
     return {
+        "schema_version": 1,
         "enabled": enabled,
         "allow_explicit_execution": True,
         "automatic_permissions": [
@@ -203,7 +204,7 @@ def test_tool_reported_failure_does_not_fall_back(
         ContextualRuntimeStatus.FAILED
     )
     assert result.handled is True
-    assert "search failed" in result.message
+    assert "Tool reported an unsuccessful result." in result.message
     assert result.execution_trace is not None
     assert result.execution_trace.status is TraceStatus.FAILED
     assert "tool_reported_failure" in result.execution_trace.error_codes
@@ -278,7 +279,7 @@ def test_actionable_invalid_request_does_not_fall_back(
         ContextualRuntimeStatus.FAILED
     )
     assert result.handled is True
-    assert "source path is required" in result.message
+    assert result.message == "The request could not be planned safely."
 
 
 def test_document_analysis_synthesizes_real_read_content(tmp_path: Path) -> None:
@@ -315,6 +316,7 @@ def test_document_analysis_synthesizes_real_read_content(tmp_path: Path) -> None
         policy_config=_policy(enabled=True),
         chat_callable=chat,
         model="local-model",
+        installed_models=("local-model",),
     )
     assert result.message == "Synthesized document answer"
     assert len(calls) == 1
@@ -346,6 +348,7 @@ def test_code_review_synthesizes_nonempty_diff_once(tmp_path: Path) -> None:
         policy_config=_policy(enabled=True),
         chat_callable=lambda model, messages: calls.append(messages) or (True, "Review answer"),
         model="local-model",
+        installed_models=("local-model",),
     )
     assert result.message == "Review answer"
     assert len(calls) == 1
@@ -372,6 +375,7 @@ def test_empty_diff_and_project_search_do_not_synthesize(tmp_path: Path) -> None
         policy_config=_policy(enabled=True),
         chat_callable=lambda model, messages: calls.append(messages) or (True, "bad"),
         model="local-model",
+        installed_models=("local-model",),
     )
     assert empty.message == "No unstaged changes."
 
@@ -385,6 +389,7 @@ def test_empty_diff_and_project_search_do_not_synthesize(tmp_path: Path) -> None
         policy_config=_policy(enabled=True),
         chat_callable=lambda model, messages: calls.append(messages) or (True, "bad"),
         model="local-model",
+        installed_models=("local-model",),
     )
     assert search.message == "No matches found."
     assert calls == []
@@ -408,6 +413,7 @@ def test_synthesis_failure_preserves_deterministic_success(tmp_path: Path) -> No
         policy_config=_policy(enabled=True),
         chat_callable=lambda model, messages: (False, "offline"),
         model="local-model",
+        installed_models=("local-model",),
     )
     assert result.ok
     assert "Evidence" in result.message

@@ -226,7 +226,8 @@ class ToolExecutorTests(unittest.TestCase):
             result.status,
             ToolExecutionStatus.INVALID_ARGUMENTS,
         )
-        self.assertIn("TypeError:", result.error)
+        self.assertEqual(result.error, "Tool arguments are invalid.")
+        self.assertEqual(result.error_code, "invalid_arguments")
 
     def test_extra_argument_is_rejected(self) -> None:
         executor = ToolExecutor({"add": add_values})
@@ -249,10 +250,8 @@ class ToolExecutorTests(unittest.TestCase):
         result = executor.execute_named("fail")
 
         self.assertEqual(result.status, ToolExecutionStatus.FAILED)
-        self.assertEqual(
-            result.error,
-            "RuntimeError: controlled failure",
-        )
+        self.assertEqual(result.error, "Tool execution failed.")
+        self.assertEqual(result.error_code, "tool_execution_failed")
 
     def test_non_callable_registry_value_is_rejected(self) -> None:
         with self.assertRaises(TypeError):
@@ -276,7 +275,8 @@ class ToolExecutorTests(unittest.TestCase):
         self.assertEqual(result.status, ToolExecutionStatus.FAILED)
         self.assertFalse(result.ok)
         self.assertFalse(tool.called)
-        self.assertIn("ValueError", result.error)
+        self.assertEqual(result.error, "Tool could not be validated safely.")
+        self.assertEqual(result.error_code, "tool_signature_invalid")
 
     def test_invalid_request_type_is_rejected(self) -> None:
         executor = ToolExecutor({})

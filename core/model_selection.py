@@ -48,6 +48,7 @@ class ModelSelectionDecision:
 
 _REQUIRED_KEYS = frozenset(
     {
+        "schema_version",
         "enabled",
         "fallback_profile",
         "intent_profiles",
@@ -86,7 +87,7 @@ def load_model_routing_policy(
             data = json.loads(Path(source).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, TypeError) as exc:
             raise ModelRoutingPolicyError(
-                f"cannot load model routing policy: {exc}"
+                "cannot load model routing policy"
             ) from exc
 
     if not isinstance(data, dict):
@@ -101,6 +102,11 @@ def load_model_routing_policy(
     if unknown:
         raise ModelRoutingPolicyError(
             "unknown model routing policy fields: " + ", ".join(sorted(unknown))
+        )
+
+    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
+        raise ModelRoutingPolicyError(
+            "unsupported model routing policy schema_version"
         )
 
     enabled = data["enabled"]
@@ -209,15 +215,24 @@ def select_model(
                 "explicit",
             )
             model = override
+        available = model in installed
         return ModelSelectionDecision(
             mode=mode,
             intent=intent_name,
             profile=profile,
             model=model,
-            reason="Explicit model override has highest priority.",
+            reason=(
+                "Explicit model override is installed."
+                if available
+                else "Explicit model override is unavailable."
+            ),
             requested_profile=profile,
-            available=True,
-            reason_code="explicit_override",
+            available=available,
+            reason_code=(
+                "explicit_override"
+                if available
+                else "explicit_model_unavailable"
+            ),
         )
 
     if mode is ModelSelectionMode.MANUAL or not policy.enabled:
