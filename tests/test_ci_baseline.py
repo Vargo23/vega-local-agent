@@ -47,3 +47,12 @@ def test_clean_checkout_contains_temp_parent_and_ci_documentation() -> None:
     assert "Python 3.12, 3.13" in documentation
     assert "immutable" in documentation
     assert "symlink" in documentation
+
+
+def test_release_check_entrypoint_bootstraps_repository_imports() -> None:
+    entrypoint = (ROOT / "scripts" / "run_release_check.py").read_text(
+        encoding="utf-8"
+    )
+    bootstrap = entrypoint.index("sys.path.insert")
+    tools_import = entrypoint.index("from tools.release_tools import")
+    assert bootstrap < tools_import
