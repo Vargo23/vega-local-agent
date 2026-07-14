@@ -39,6 +39,9 @@ def test_ci_covers_the_release_gate_without_publication() -> None:
         assert expected in workflow
     for forbidden in ("git push", "gh release", "git tag", "git commit"):
         assert forbidden not in workflow
+    matrix_job, release_job = workflow.split("  release-gate:", maxsplit=1)
+    assert "ref: ${{ github.head_ref || github.ref }}" not in matrix_job
+    assert "ref: ${{ github.head_ref || github.ref }}" in release_job
 
 
 def test_clean_checkout_contains_temp_parent_and_ci_documentation() -> None:
@@ -56,3 +59,4 @@ def test_release_check_entrypoint_bootstraps_repository_imports() -> None:
     bootstrap = entrypoint.index("sys.path.insert")
     tools_import = entrypoint.index("from tools.release_tools import")
     assert bootstrap < tools_import
+    assert '"issues": status.get("issues", [])' in entrypoint
