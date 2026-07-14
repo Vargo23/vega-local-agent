@@ -29,6 +29,8 @@ class ExecutionProgressStage(str, Enum):
     STEP_FAILED = "step_failed"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
 
 
 def safe_progress_title(value: object) -> str:

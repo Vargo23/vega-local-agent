@@ -5,15 +5,16 @@ import subprocess
 from pathlib import Path
 
 from core.production_snapshot import build_production_snapshot
-from scripts.vega_banner import VERSION as BANNER_VERSION
+from scripts.vega_banner import VERSION as BANNER_VERSION, VegaStatus, render_banner
 from scripts.version import VERSION
+from tools.release_tools import build_release_notes
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_identity_is_synchronized() -> None:
-    assert VERSION == "v2.13.0"
+    assert VERSION == "v3.0.0"
     assert BANNER_VERSION == VERSION
 
     for relative in (
@@ -24,11 +25,12 @@ def test_release_identity_is_synchronized() -> None:
         "docs/commands.md",
         "docs/security.md",
         "docs/roadmap.md",
-        "docs/v2.13-architecture.md",
-        "docs/releases/v2.13.0.md",
+        "docs/v3.0-architecture.md",
+        "docs/migrations/v3.0.0.md",
+        "docs/releases/v3.0.0.md",
     ):
         text = (ROOT / relative).read_text(encoding="utf-8")
-        assert "v2.13.0" in text, relative
+        assert "v3.0.0" in text, relative
 
 
 def test_required_architecture_and_release_notes_exist() -> None:
@@ -36,11 +38,36 @@ def test_required_architecture_and_release_notes_exist() -> None:
         (ROOT / "config" / "release_policy.json").read_text(encoding="utf-8")
     )
 
-    assert "docs/releases/v2.13.0.md" in policy["required_files"]
-    assert "docs/v2.13-architecture.md" in policy["required_files"]
+    assert "docs/releases/v3.0.0.md" in policy["required_files"]
+    assert "docs/migrations/v3.0.0.md" in policy["required_files"]
+    assert "docs/v3.0-architecture.md" in policy["required_files"]
     assert "config/diagnostics_policy.json" in policy["required_files"]
-    assert (ROOT / "docs" / "v2.13-architecture.md").is_file()
-    assert (ROOT / "docs" / "releases" / "v2.13.0.md").is_file()
+    assert (ROOT / "docs" / "v3.0-architecture.md").is_file()
+    assert (ROOT / "docs" / "migrations" / "v3.0.0.md").is_file()
+    assert (ROOT / "docs" / "releases" / "v3.0.0.md").is_file()
+
+
+def test_legacy_config_and_release_notes_use_v3_identity() -> None:
+    config = (ROOT / "config" / "vega.config.yaml").read_text(encoding="utf-8")
+    policy = json.loads(
+        (ROOT / "config" / "release_policy.json").read_text(encoding="utf-8")
+    )
+    notes = build_release_notes(ROOT)
+
+    assert 'version: "3.0.0"' in config
+    assert 'current_version: "v3.0.0"' in config
+    assert all("v2.13" not in path for path in policy["required_files"])
+    assert notes["ok"]
+    assert notes["data"]["version"] == VERSION
+    assert "## v3.0.0 - Operator Console" in notes["data"]["draft"]
+    assert "## v2.13.0" not in notes["data"]["draft"]
+
+
+def test_legacy_banner_status_constructor_remains_source_compatible() -> None:
+    output = render_banner(VegaStatus("legacy-model", True, VERSION))
+
+    assert "legacy-model" in output
+    assert "Internet" not in output
 
 
 def test_release_policy_forbids_automatic_publication() -> None:
@@ -135,8 +162,9 @@ def test_release_documents_contain_no_known_mojibake() -> None:
         "RELEASE_NOTES.md",
         "docs/architecture.md",
         "docs/roadmap.md",
-        "docs/v2.13-architecture.md",
-        "docs/releases/v2.13.0.md",
+        "docs/v3.0-architecture.md",
+        "docs/migrations/v3.0.0.md",
+        "docs/releases/v3.0.0.md",
     ):
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert all(marker not in text for marker in markers), relative

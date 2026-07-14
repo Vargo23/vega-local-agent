@@ -2,28 +2,58 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## v3.0.0 - Operator Console and Live Execution UX
+
 Added:
 
-* Compact model-aware terminal prompt with Unicode and ASCII forms.
+* Compact, width-aware `VEGA / OPERATOR CONSOLE` startup screen with runtime
+  version, workspace, selected model, readiness state, restrained ANSI colors,
+  and Unicode/ASCII forms.
+* Compact `vega ›` task prompt with an ASCII `vega >` fallback.
 * Request-local execution progress events for analysis, planning, validated plan
   display, running/completed/failed steps, confirmation waits, skipped steps,
   and terminal outcomes.
 * Dependency-free TTY and non-interactive progress rendering with an exact
   plan-derived bar and elapsed completion time.
+* Request-local live timers, locale-aware duration/token summaries, and exact
+  nullable Ollama input/output/total usage for regular and streaming responses.
+* Additive `REQUEST_METRICS` session-log records containing UTC start/end,
+  duration, execution status, diagnostic phase durations, and nullable counts.
 
 Changed:
 
+* The legacy framed ASCII logo, `VEGA SESSION` block, startup network/safety/log
+  details, and decorative slogan are removed from the startup path.
 * The contextual runtime and existing `execute_plan() -> ToolExecutor` path now
   publish optional fail-soft progress callbacks. Renderer failures cannot retry
   or alter tool execution.
+* The detailed Ollama response distinguishes timeout and exposes exact usage;
+  the legacy `(ok, content)` call contract remains available.
 
 Security:
 
 * Progress events contain only bounded user-facing titles and counters. They do
   not expose tool arguments, payloads, results, exception objects, tracebacks,
   prompts, tokens, or other execution internals.
-* Execution progress is request-local and non-persistent; bounded execution
-  traces remain a separate opt-in diagnostic history.
+* Live progress is request-local and ephemeral. Persisted aggregate request
+  metrics contain no additional prompt, response, tool payload, or secret data;
+  bounded execution traces remain a separate opt-in diagnostic history.
+
+Compatibility:
+
+* Commands, model selection, permission policy, plugin API, workflow state,
+  diagnostics, and persisted schemas are unchanged from v2.13.0.
+* The pre-v3 `render_startup_screen(...)` positional arguments and
+  `VegaStatus(model, internet, version)` construction remain accepted; removed
+  startup fields are ignored rather than rendered.
+* The intentional breaking change is limited to terminal presentation: scripts
+  that snapshot or parse the old banner and two-line prompt must be updated.
+* The unused internal `core.agent_runtime.banner()` and `fallback_banner()`
+  helpers and the standalone `scripts/vega_banner.py` execution mode are
+  removed. `scripts/vega.py` remains the only CLI entrypoint; compatibility
+  imports use `scripts.vega_banner.render_banner()` or `ui.startup_screen`.
 
 ## v2.13.0 - Controlled Coding Workflows
 

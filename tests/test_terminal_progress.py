@@ -1,6 +1,7 @@
 from io import StringIO
 
 from core.execution_progress import ExecutionProgressEvent, ExecutionProgressStage
+from core.request_metrics import RequestMetrics, RequestStatus
 from ui.terminal_progress import TerminalProgressRenderer
 
 
@@ -173,3 +174,57 @@ def test_empty_plan_completion_is_safe() -> None:
     )
 
     assert stream.getvalue() == "+ Done in 0.0 sec.\n"
+
+
+def test_interactive_request_timer_updates_and_stops() -> None:
+    now = [0.0]
+    metrics = RequestMetrics(clock=lambda: now[0])
+    stream = StringIO()
+    renderer = TerminalProgressRenderer(
+        stream,
+        interactive=True,
+        ansi=False,
+        unicode=False,
+        metrics=metrics,
+        refresh_interval=10,
+    )
+
+    renderer.start_timer()
+    renderer(_event(ExecutionProgressStage.RECEIVED))
+    assert renderer._timer_thread is not None
+    now[0] = 65
+    renderer.refresh_timer()
+    metrics.stop(RequestStatus.COMPLETED)
+    renderer(_event(ExecutionProgressStage.COMPLETED, title="Done"))
+    stopped_output = stream.getvalue()
+    now[0] = 100
+    renderer.refresh_timer()
+
+    assert "1 min 5 sec" in stopped_output
+    assert renderer._timer_thread is None
+    assert stream.getvalue() == stopped_output
+
+
+def test_error_cancel_and_timeout_stop_request_timer() -> None:
+    for stage in (
+        ExecutionProgressStage.FAILED,
+        ExecutionProgressStage.CANCELLED,
+        ExecutionProgressStage.TIMED_OUT,
+    ):
+        now = [0.0]
+        metrics = RequestMetrics(clock=lambda: now[0])
+        renderer = TerminalProgressRenderer(
+            StringIO(),
+            interactive=True,
+            ansi=False,
+            unicode=False,
+            metrics=metrics,
+            refresh_interval=10,
+        )
+        renderer.start_timer()
+        renderer(_event(ExecutionProgressStage.ANALYZING))
+        now[0] = 4
+        metrics.stop(RequestStatus.FAILED)
+        renderer(_event(stage))
+
+        assert renderer._timer_thread is None

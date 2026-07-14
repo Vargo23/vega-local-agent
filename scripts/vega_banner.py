@@ -1,28 +1,39 @@
+"""Compatibility renderer for the canonical UI startup screen."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
+from pathlib import Path
 
 try:
-    from version import APP_NAME, APP_SUBTITLE, VERSION
+    from version import VERSION
 except ImportError:
-    from scripts.version import APP_NAME, APP_SUBTITLE, VERSION
+    from scripts.version import VERSION
+
+from ui.startup_screen import build_startup_screen
 
 
 @dataclass
 class VegaStatus:
-    model: str = "vega-core"
+    model: str | None = None
     internet: bool = False
     version: str = VERSION
+    workspace: str | None = None
+    status: str = "Ready"
 
 
 def render_banner(status: VegaStatus) -> str:
-    internet_status = "ON" if status.internet else "OFF"
-    return "\n".join([
-        f"{APP_NAME} {status.version}",
-        APP_SUBTITLE,
-        f"Model: {status.model}",
-        f"Internet: {internet_status}",
-        "Status: Ready",
-    ])
+    root = Path(__file__).resolve().parents[1]
+    model = status.model
+    if not model:
+        from core.agent_runtime import load_model_name
 
+        model = load_model_name(root)
 
-if __name__ == "__main__":
-    print(render_banner(VegaStatus()))
+    return build_startup_screen(
+        version=status.version,
+        workspace=status.workspace or root.name,
+        model=model,
+        status=status.status,
+        color=False,
+    )

@@ -118,7 +118,7 @@ installation, or publication authority. See
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v2.13.0`
+Project version: `v3.0.0`
 
 ### Documentation Builder policy
 
@@ -259,3 +259,13 @@ and production policy is rechecked before every use.
 One-time input `y` or `yes` approves once. `n` or `no`, empty and unknown input,
 EOF, `KeyboardInterrupt`, callback errors, and unavailable interactive input all
 fail closed. The internal confirmation token is not shown to the user.
+
+## Request-metrics privacy
+
+The v3 request timer persists only aggregate metadata in `REQUEST_METRICS`
+session-log sections: UTC boundaries, duration, status, diagnostic phase
+durations, and nullable input/output/total token counts returned by Ollama. The
+feature does not add prompt, response, tool argument, payload, secret, or model
+context content to persistence. Missing usage is stored as `null`, never as an
+estimate or a misleading zero. The TTY redraw thread has no persistence or
+execution authority.

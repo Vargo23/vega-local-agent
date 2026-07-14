@@ -126,7 +126,7 @@ file. No doctor output includes an absolute project path.
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v2.13.0`
+Project version: `v3.0.0`
 
 This section is generated from `scripts/vega.py`.
 
@@ -304,9 +304,10 @@ passed to tool callables.
 
 ## Interactive prompt and live status
 
-The task prompt displays the active model and the local runtime label. Unicode
-terminals receive the compact two-line prompt; unsupported terminals receive a
-plain ASCII form. Color is optional, and disabling it emits no ANSI sequences.
+The startup screen displays the canonical version, workspace, active model, and
+runtime readiness. The separate task prompt is `vega ›`; unsupported terminals
+receive `vega >`. Color is optional, and disabling it emits no ANSI sequences.
+The startup screen does not display network, safety, or session-log details.
 
 For supported natural-language execution, VEGA reports analysis and planning
 with an indeterminate spinner. Percentages and progress bars begin only after a
@@ -314,3 +315,11 @@ real validated plan is available. Plan titles are bounded user-facing labels;
 tool arguments, payloads, results, prompts, secrets, exception objects, and raw
 tracebacks are not rendered. Interactive TTYs can redraw a status line, while
 redirected and non-interactive output remains a sequence of normal lines.
+
+The status line includes elapsed request time and is reset for every request.
+It stops on success, error, timeout, or cancellation. After completion, VEGA
+prints exact input/output/total token counts when Ollama returned complete
+usage; otherwise it explicitly reports that usage data is unavailable. It does
+not estimate tokens or display a synthetic zero. Diagnostic phase timings and
+the final request status are stored in the session log's additive
+`REQUEST_METRICS` section without adding prompt or response content.

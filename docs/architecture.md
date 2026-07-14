@@ -149,6 +149,28 @@ VEGA не должна:
 - добавлять GUI раньше стабильной базы;
 - соглашаться с плохой идеей только ради вежливости.
 
+## v3 operator console and live progress boundary
+
+`ui/startup_screen.py` owns the width-aware startup presentation. The runtime
+passes the canonical release version, resolved project-root name, selected
+model, and production readiness status. It does not render network policy,
+permission policy, or session-log paths. `ui/terminal_prompt.py` owns the one
+existing `vega ›` input prompt, so the startup renderer never creates a second
+input loop.
+
+`core/execution_progress.py` defines immutable payload-free progress events.
+`core/contextual_runtime.py` and `core/plan_executor.py` emit optional fail-soft
+observations around the existing execution path; `ui/terminal_progress.py`
+renders them without receiving authority over tools, plans, permissions, or
+retries. See [`docs/v3.0-architecture.md`](v3.0-architecture.md).
+
+`core/request_metrics.py` owns one monotonic timer and exact nullable usage
+aggregate per chat request. `core/ollama_client.py` maps only Ollama's returned
+`prompt_eval_count`/`eval_count` fields; `ui/request_summary.py` formats the
+final localized summary. The terminal timer thread redraws UI only. Structured
+aggregate metadata is appended to the session log without duplicating request
+or response content.
+
 ## Controlled coding workflow layer
 
 VEGA v2.13.0 composes the existing deterministic workflow registry, Patch
@@ -175,7 +197,7 @@ migration rules, threat model, and limitations are maintained in
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v2.13.0`
+Project version: `v3.0.0`
 
 This section is generated from the current project tree.
 

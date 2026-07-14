@@ -5,13 +5,13 @@
 Current stable release:
 
 ```text
-v2.13.0 - Controlled Coding Workflows
+v3.0.0 - Operator Console and Live Execution UX
 ```
 
 Previous stable release:
 
 ```text
-v2.12.1 - Local State Integrity & Recovery Stabilization
+v2.13.0 - Controlled Coding Workflows
 ```
 
 Previous extension API release:
@@ -26,9 +26,11 @@ Next planned release:
 TBD
 ```
 
-v2.13 is implemented and release-validated. It adds deterministic controlled
-coding, test, and review workflows without autonomous execution, direct model
-tools, arbitrary shell, remote telemetry, background work, or publication.
+v3.0 is implemented and validated in the migration working tree. The final
+clean-tree Release Manager gate remains pending a separately authorized commit.
+The release adds the Operator Console and request-local live execution progress
+without changing tool authority, persisted schemas, model selection,
+permissions, or publication policy.
 
 ## v0.1 — стабильная база
 
@@ -307,13 +309,17 @@ Implemented in `feature/v2.13-controlled-coding-workflows`:
 See [`docs/v2.13-architecture.md`](v2.13-architecture.md). The next release scope
 is `TBD`.
 
-## Live Execution UX patch status
+## v3.0.0 release status
 
-Status: `implemented on feature/v2.11-live-execution-ux`
+Status: `implemented; checks passed; clean-tree gate pending commit`
 
-The patch adds the model-aware Unicode/ASCII prompt, honest analysis and
+The release adds the width-aware Operator Console, Unicode/ASCII prompt, honest analysis and
 planning spinner states, one-time validated plan display, exact step progress,
 confirmation/skipped/failure/success states, and fail-soft renderer integration
 with the existing contextual `ToolExecutor` path. Execution progress remains
 ephemeral and payload-free; v2.10 execution traces remain separate bounded
-diagnostic history. The stable release identity is not downgraded from v2.13.0.
+diagnostic history. No data or policy schema migration is required.
+
+See [`docs/v3.0-architecture.md`](v3.0-architecture.md), the
+[`v3.0.0 migration guide`](migrations/v3.0.0.md), and the
+[`v3.0.0 release notes`](releases/v3.0.0.md).

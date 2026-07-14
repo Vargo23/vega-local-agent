@@ -1,96 +1,211 @@
+"""Compact, width-aware VEGA operator console startup screen."""
+
 from __future__ import annotations
 
+import re
+import shutil
+import sys
 from pathlib import Path
-from typing import Any
+from typing import TextIO
 
-OUTER_WIDTH = 62
-INNER_WIDTH = OUTER_WIDTH - 2
-
-
-def _border() -> str:
-    return "+" + ("-" * INNER_WIDTH) + "+"
+from ui.terminal_theme import detect_terminal_capabilities
 
 
-def _title_border(title: str) -> str:
-    title_text = f" {title} "
-    remaining = INNER_WIDTH - len(title_text)
-    left = remaining // 2
-    right = remaining - left
-    return "+" + ("-" * left) + title_text + ("-" * right) + "+"
+DEFAULT_TERMINAL_WIDTH = 80
+TITLE = "VEGA / OPERATOR CONSOLE"
+INVITATION = "Give me a mission, or type /help."
+
+_ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_CYAN = "36"
+_GREEN = "32"
+_NEUTRAL = "90"
 
 
-def _line(text: str = "") -> str:
-    safe_text = _ascii_only(str(text))
-    if len(safe_text) > INNER_WIDTH:
-        safe_text = safe_text[: INNER_WIDTH - 3] + "..."
-    return "|" + safe_text.ljust(INNER_WIDTH) + "|"
+def _clean(value: object, fallback: str) -> str:
+    text = _CONTROL.sub("", str(value)).strip()
+    return text or fallback
 
 
-def _field(label: str, value: Any) -> str:
-    return _line(f" {label:<9}: {_ascii_only(str(value))}")
+def _fit(text: str, width: int, *, unicode: bool) -> str:
+    """Keep one plain-text line inside the available terminal width."""
 
-
-def _ascii_only(value: str) -> str:
-    return "".join(ch if ord(ch) < 128 else "?" for ch in value)
-
-
-def _short_log_path(log_path: Any) -> str:
-    if log_path is None:
+    if width <= 0:
         return ""
+    if len(text) <= width:
+        return text
+    marker = "…" if unicode else "..."
+    if width <= len(marker):
+        return marker[:width]
+    return text[: width - len(marker)].rstrip() + marker
 
-    raw = str(log_path)
-    if not raw:
-        return ""
 
-    name = Path(raw).name
-    if name and ("logs" in raw.lower() or "sessions" in raw.lower()):
-        return "logs\\sessions\\" + name
-    return raw
+def _terminal_width(width: int | None) -> int:
+    if width is not None:
+        try:
+            return max(1, int(width))
+        except (TypeError, ValueError):
+            pass
+    try:
+        detected = shutil.get_terminal_size(
+            fallback=(DEFAULT_TERMINAL_WIDTH, 24)
+        ).columns
+    except (OSError, ValueError):
+        detected = DEFAULT_TERMINAL_WIDTH
+    return max(1, detected)
+
+
+def _field(label: str, value: object, width: int, *, unicode: bool) -> str:
+    value_text = _clean(value, "unknown")
+    if width >= 12:
+        prefix = f"{label:<10} "
+    else:
+        prefix = f"{label} "
+    return _fit(prefix + value_text, width, unicode=unicode)
+
+
+def _paint(text: str, code: str, *, enabled: bool) -> str:
+    if not enabled or not text:
+        return text
+    return f"\x1b[{code}m{text}\x1b[0m"
+
+
+def build_startup_screen(
+    *,
+    version: object | None = None,
+    workspace: object | None = None,
+    model: object | None = None,
+    status: object = "Ready",
+    width: int | None = None,
+    color: bool | None = None,
+    unicode: bool | None = None,
+    stream: TextIO | None = None,
+) -> str:
+    """Build the startup screen from current runtime and terminal state."""
+
+    stream = stream or sys.stdout
+    capabilities = detect_terminal_capabilities(
+        stream,
+        ansi=color,
+        unicode=unicode,
+    )
+    terminal_width = _terminal_width(width)
+
+    if version is None:
+        from scripts.version import VERSION
+
+        version = VERSION
+    if workspace is None:
+        workspace = Path.cwd().name or str(Path.cwd())
+
+    version_text = _clean(version, "unknown")
+    model_text = _clean(model, "unknown-model")
+    workspace_text = _clean(workspace, "workspace")
+    status_text = _clean(status, "Ready")
+    unicode_enabled = capabilities.unicode
+    color_enabled = capabilities.ansi
+
+    title = _fit(TITLE, terminal_width, unicode=unicode_enabled)
+    version_label = _fit(version_text, terminal_width, unicode=unicode_enabled)
+    header_gap = terminal_width - len(title) - len(version_label)
+    if header_gap >= 2:
+        header_lines = [
+            _paint(title, _CYAN, enabled=color_enabled)
+            + (" " * header_gap)
+            + _paint(version_label, _NEUTRAL, enabled=color_enabled)
+        ]
+    else:
+        header_lines = [
+            _paint(title, _CYAN, enabled=color_enabled),
+            _paint(version_label, _NEUTRAL, enabled=color_enabled),
+        ]
+
+    separator_symbol = "─" if unicode_enabled else "-"
+    ready_symbol = "◇" if unicode_enabled else "*"
+    normalized_status = status_text.lower()
+    status_label = (
+        "Agent ready"
+        if normalized_status == "ready"
+        else f"Agent {normalized_status}"
+    )
+    status_line = _fit(
+        f"{ready_symbol} {status_label}",
+        terminal_width,
+        unicode=unicode_enabled,
+    )
+    invitation = _fit(
+        f"  {INVITATION}",
+        terminal_width,
+        unicode=unicode_enabled,
+    )
+
+    lines = [
+        *header_lines,
+        _paint(
+            separator_symbol * terminal_width,
+            _CYAN,
+            enabled=color_enabled,
+        ),
+        "",
+        _field(
+            "workspace",
+            workspace_text,
+            terminal_width,
+            unicode=unicode_enabled,
+        ),
+        _field(
+            "model",
+            model_text,
+            terminal_width,
+            unicode=unicode_enabled,
+        ),
+        "",
+        _paint(status_line, _GREEN, enabled=color_enabled),
+        invitation,
+    ]
+    return "\n".join(lines)
 
 
 def render_startup_screen(
-    version: str | None = None,
-    model: str | None = None,
-    internet_status: str | None = None,
-    status: str | None = None,
-    log_path: Any | None = None,
+    version: object | None = None,
+    model: object | None = None,
+    internet_status: object | None = None,
+    status: object | None = None,
+    log_path: object | None = None,
+    *,
+    workspace: object | None = None,
+    width: int | None = None,
+    color: bool | None = None,
+    unicode: bool | None = None,
+    stream: TextIO | None = None,
 ) -> None:
-    if version is None:
-        try:
-            from scripts.version import VERSION
+    """Print the startup screen without owning or duplicating the input prompt.
 
-            version = VERSION
-        except ImportError:
-            version = "v1.0.0"
-    model = model or "vega-core"
-    internet_status = internet_status or "OFF"
-    status = status or "Ready"
-    log_value = _short_log_path(log_path)
+    ``internet_status`` and ``log_path`` retain the pre-v3 call signature but
+    are intentionally not rendered by the operator console.
+    """
 
-    lines = [
-        _border(),
-        _line(''),
-        _line('       __      __  ______   _____      _'),
-        _line('       \\ \\    / / |  ____| / ____|    / \\'),
-        _line('        \\ \\  / /  | |__   | |  __    / _ \\'),
-        _line('         \\ \\/ /   |  __|  | | |_ |  / ___ \\'),
-        _line('          \\  /    | |____ | |__| | / /   \\ \\'),
-        _line('           \\/     |______| \\_____|/_/     \\_\\'),
-        _line(''),
-        _line('              Local Project Coding-Agent'),
-        _line(''),
-        _border(),
-        "",
-        _title_border("VEGA SESSION"),
-        _field("Version", version),
-        _field("Model", model),
-        _field("Internet", internet_status),
-        _field("Status", status),
-        _field("Log", log_value),
-        _border(),
-        "",
-        "Commands: /workspace  |  /task  |  /docs  |  /status  |  /help  |  /exit",
-    ]
+    stream = stream or sys.stdout
+    del internet_status, log_path
+    print(
+        build_startup_screen(
+            version=version,
+            workspace=workspace,
+            model=model,
+            status=status or "Ready",
+            width=width,
+            color=color,
+            unicode=unicode,
+            stream=stream,
+        ),
+        file=stream,
+    )
 
-    print("\n".join(lines))
 
+def visible_width(line: str) -> int:
+    """Return printable width for tests and terminal-safe integrations."""
+
+    return len(_ANSI.sub("", line))
+
+
+__all__ = ["build_startup_screen", "render_startup_screen", "visible_width"]

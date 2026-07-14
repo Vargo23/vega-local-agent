@@ -1,13 +1,31 @@
 ﻿import json
+import socket
 import unittest
 import urllib.error
 from unittest.mock import MagicMock, patch
 
 from core.ollama_client import (
+    OllamaChatStatus,
     api_error_message,
     call_ollama_chat,
     check_ollama_ready,
+    request_ollama_chat,
 )
+from core.request_metrics import TokenUsage
+
+
+class StreamingResponse:
+    def __init__(self, lines: list[bytes]) -> None:
+        self.lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        return None
+
+    def __iter__(self):
+        return iter(self.lines)
 
 
 class OllamaClientTests(unittest.TestCase):
@@ -40,6 +58,102 @@ class OllamaClientTests(unittest.TestCase):
             content,
             "Hello",
         )
+
+    @patch("core.ollama_client.urllib.request.urlopen")
+    def test_exact_server_usage_is_returned(self, urlopen) -> None:
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {
+                "message": {"content": "OK"},
+                "prompt_eval_count": 1247,
+                "eval_count": 53,
+            }
+        ).encode("utf-8")
+        urlopen.return_value = response
+        observed = []
+
+        ok, content = call_ollama_chat(
+            "test-model",
+            [],
+            usage_callback=observed.append,
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(content, "OK")
+        self.assertEqual(observed, [TokenUsage(1247, 53)])
+
+    @patch("core.ollama_client.urllib.request.urlopen")
+    def test_incomplete_server_usage_is_unavailable(self, urlopen) -> None:
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = (
+            b'{"message":{"content":"OK"},"eval_count":3}'
+        )
+        urlopen.return_value = response
+        observed = []
+
+        ok, _ = call_ollama_chat(
+            "test-model",
+            [],
+            usage_callback=observed.append,
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(observed, [None])
+
+    @patch("core.ollama_client.urllib.request.urlopen")
+    def test_stream_uses_final_chunk_usage_and_emits_content(
+        self,
+        urlopen,
+    ) -> None:
+        urlopen.return_value = StreamingResponse(
+            [
+                b'{"message":{"content":"Hel"},"done":false}\n',
+                b'{"message":{"content":"lo"},"done":false}\n',
+                (
+                    b'{"message":{"content":""},"done":true,'
+                    b'"prompt_eval_count":9,"eval_count":2}\n'
+                ),
+            ]
+        )
+        chunks = []
+
+        result = request_ollama_chat(
+            "test-model",
+            [],
+            stream=True,
+            chunk_callback=chunks.append,
+        )
+
+        self.assertEqual(result.status, OllamaChatStatus.COMPLETED)
+        self.assertEqual(result.content, "Hello")
+        self.assertEqual(result.usage, TokenUsage(9, 2))
+        self.assertEqual(chunks, ["Hel", "lo"])
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertTrue(payload["stream"])
+
+    @patch("core.ollama_client.urllib.request.urlopen")
+    def test_stream_without_final_usage_does_not_invent_tokens(
+        self,
+        urlopen,
+    ) -> None:
+        urlopen.return_value = StreamingResponse(
+            [b'{"message":{"content":"OK"},"done":true}\n']
+        )
+
+        result = request_ollama_chat("test-model", [], stream=True)
+
+        self.assertTrue(result.ok)
+        self.assertIsNone(result.usage)
+
+    @patch("core.ollama_client.urllib.request.urlopen")
+    def test_timeout_has_distinct_status(self, urlopen) -> None:
+        urlopen.side_effect = socket.timeout()
+
+        result = request_ollama_chat("test-model", [])
+
+        self.assertEqual(result.status, OllamaChatStatus.TIMED_OUT)
+        self.assertIsNone(result.usage)
 
     @patch(
         "core.ollama_client."

@@ -4,15 +4,16 @@
 from __future__ import annotations
 
 import datetime as dt
-import importlib.util
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 try:
-    from version import APP_NAME, APP_SUBTITLE, VERSION
+    from version import VERSION
 except ImportError:
-    from scripts.version import APP_NAME, APP_SUBTITLE, VERSION
+    from scripts.version import VERSION
 
 from core.command_executor import (
     CommandExecutionRequest,
@@ -24,8 +25,15 @@ from permissions.session_grants import SessionGrantStore
 from core.command_router import CommandTarget
 from core.execution_context import ExecutionContext
 from core.ollama_client import (
-    call_ollama_chat,
+    OllamaChatStatus,
     check_ollama_ready,
+    request_ollama_chat,
+)
+from core.request_metrics import (
+    RequestMetrics,
+    RequestMetricsSnapshot,
+    RequestPhase,
+    RequestStatus,
 )
 from core.orchestrator import (
     AgentOrchestrator,
@@ -109,33 +117,6 @@ def now_stamp() -> str:
 
 def display_time() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def fallback_banner(model: str) -> str:
-    return "\n".join([
-        f"{APP_NAME} {VERSION}",
-        APP_SUBTITLE,
-        f"Model: {model}",
-        "Internet: OFF",
-        "Status: Ready",
-    ])
-
-
-def banner(root: Path, model: str) -> str:
-    banner_path = root / "scripts" / "vega_banner.py"
-    try:
-        spec = importlib.util.spec_from_file_location("vega_banner", banner_path)
-        if spec is None or spec.loader is None:
-            return fallback_banner(model)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        status_cls = getattr(module, "VegaStatus", None)
-        render = getattr(module, "render_banner", None)
-        if status_cls is None or render is None:
-            return fallback_banner(model)
-        return render(status_cls(model=model, internet=internet_enabled(), version=VERSION))
-    except Exception:
-        return fallback_banner(model)
 
 
 def internet_enabled() -> bool:
@@ -231,6 +212,23 @@ def append_log(log_file: Path, section: str, text: str = "") -> None:
         handle.write(f"\n[{section}] {display_time()}\n")
         if text:
             handle.write(text.rstrip() + "\n")
+
+
+def append_request_metrics(
+    log_file: Path,
+    snapshot: RequestMetricsSnapshot,
+) -> None:
+    """Persist request metadata without duplicating prompt or response text."""
+
+    append_log(
+        log_file,
+        "REQUEST_METRICS",
+        json.dumps(
+            snapshot.to_log_record(),
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+    )
 
 
 def create_log(root: Path, model: str) -> Path:
@@ -1230,10 +1228,9 @@ def main() -> int:
 
     render_startup_screen(
         version=VERSION,
+        workspace=context.project_root.name,
         model=context.model,
-        internet_status=INTERNET,
         status=production_runtime.status,
-        log_path=context.log_file,
     )
     print(
         "Production policy: "
@@ -1283,6 +1280,8 @@ def main() -> int:
             )
             return 0
 
+        request_started_tick = time.monotonic()
+        request_started_at = dt.datetime.now(dt.timezone.utc)
         result = orchestrator.process(
             raw_input
         )
@@ -1388,16 +1387,77 @@ def main() -> int:
             ExecutionProgressStage,
         )
         from ui.terminal_progress import TerminalProgressRenderer
+        from ui.request_summary import format_request_summary
 
-        progress_renderer = TerminalProgressRenderer(sys.stdout)
+        request_metrics = RequestMetrics(
+            started_monotonic=request_started_tick,
+            started_at=request_started_at,
+        )
+        progress_renderer = TerminalProgressRenderer(
+            sys.stdout,
+            metrics=request_metrics,
+        )
+        progress_renderer.start_timer()
+        progress_renderer(
+            ExecutionProgressEvent(
+                stage=ExecutionProgressStage.RECEIVED,
+            )
+        )
+        terminal_events: list[ExecutionProgressEvent] = []
+
+        def report_request_progress(event: ExecutionProgressEvent) -> None:
+            if event.stage is ExecutionProgressStage.RECEIVED:
+                return
+            if event.stage in {
+                ExecutionProgressStage.PLAN_READY,
+                ExecutionProgressStage.STEP_RUNNING,
+                ExecutionProgressStage.AWAITING_CONFIRMATION,
+                ExecutionProgressStage.STEP_COMPLETED,
+                ExecutionProgressStage.STEP_SKIPPED,
+                ExecutionProgressStage.STEP_FAILED,
+            }:
+                request_metrics.mark_phase(RequestPhase.TOOLS)
+            if event.stage in {
+                ExecutionProgressStage.COMPLETED,
+                ExecutionProgressStage.FAILED,
+                ExecutionProgressStage.CANCELLED,
+                ExecutionProgressStage.TIMED_OUT,
+            }:
+                terminal_events[:] = [event]
+                return
+            progress_renderer(event)
+
+        def finish_request(
+            status: RequestStatus,
+            stage: ExecutionProgressStage,
+            title: str,
+        ) -> str:
+            request_metrics.mark_phase(RequestPhase.SAVING)
+            snapshot = request_metrics.stop(status)
+            template = terminal_events[-1] if terminal_events else None
+            progress_renderer(
+                ExecutionProgressEvent(
+                    stage=stage,
+                    current_step=(
+                        template.current_step if template is not None else 0
+                    ),
+                    total_steps=(
+                        template.total_steps if template is not None else 0
+                    ),
+                    title=title,
+                    elapsed_seconds=snapshot.duration_seconds,
+                )
+            )
+            progress_renderer.close()
+            append_request_metrics(context.log_file, snapshot)
+            return format_request_summary(
+                snapshot,
+                unicode=progress_renderer.capabilities.unicode,
+                detailed=True,
+            )
 
         if result.message:
             print(result.message)
-            progress_renderer(
-                ExecutionProgressEvent(
-                    stage=ExecutionProgressStage.RECEIVED,
-                )
-            )
             progress_renderer(
                 ExecutionProgressEvent(
                     stage=ExecutionProgressStage.ANALYZING,
@@ -1407,16 +1467,30 @@ def main() -> int:
 
         if not result.message:
             from core.contextual_runtime import (
+                ContextualRuntimeStatus,
                 try_execute_contextual_request,
             )
             from core.execution_trace import append_trace
 
-            contextual_result = (
-                try_execute_contextual_request(
+            def tracked_contextual_chat(
+                selected_model: str,
+                messages: list[dict[str, str]],
+            ) -> tuple[bool, str]:
+                request_metrics.mark_phase(RequestPhase.MODEL_WAIT)
+                chat_response = request_ollama_chat(
+                    selected_model,
+                    messages,
+                )
+                request_metrics.record_usage(chat_response.usage)
+                request_metrics.mark_phase(RequestPhase.RESPONSE_PROCESSING)
+                return chat_response.ok, chat_response.content
+
+            try:
+                contextual_result = try_execute_contextual_request(
                     result.intent.normalized_text,
                     context.project_root,
                     tool_executor,
-                    chat_callable=call_ollama_chat,
+                    chat_callable=tracked_contextual_chat,
                     production_snapshot=production_runtime.snapshot,
                     trace_callback=(
                         lambda trace: append_trace(
@@ -1424,12 +1498,25 @@ def main() -> int:
                             trace,
                         )
                     ),
-                    progress_callback=progress_renderer,
+                    progress_callback=report_request_progress,
                 )
-            )
+            except KeyboardInterrupt:
+                request_metrics.mark_phase(RequestPhase.SAVING)
+                append_log(
+                    context.log_file,
+                    "WARNING",
+                    "Request cancelled by user.",
+                )
+                summary = finish_request(
+                    RequestStatus.CANCELLED,
+                    ExecutionProgressStage.CANCELLED,
+                    "Обработка отменена",
+                )
+                print(summary)
+                continue
 
             if contextual_result.handled:
-                print(contextual_result.message)
+                request_metrics.mark_phase(RequestPhase.SAVING)
                 append_log(
                     context.log_file,
                     "CONTEXTUAL",
@@ -1450,7 +1537,25 @@ def main() -> int:
                             "CONTEXTUAL_SYNTHESIS_FALLBACK",
                             contextual_result.synthesis_result.reason,
                         )
-                progress_renderer.close()
+                if contextual_result.status is ContextualRuntimeStatus.COMPLETED:
+                    metric_status = RequestStatus.COMPLETED
+                    progress_stage = ExecutionProgressStage.COMPLETED
+                    progress_title = "Ответ готов"
+                elif contextual_result.status is ContextualRuntimeStatus.BLOCKED:
+                    metric_status = RequestStatus.BLOCKED
+                    progress_stage = ExecutionProgressStage.FAILED
+                    progress_title = "Обработка заблокирована политикой"
+                else:
+                    metric_status = RequestStatus.FAILED
+                    progress_stage = ExecutionProgressStage.FAILED
+                    progress_title = "Не удалось выполнить запрос"
+                summary = finish_request(
+                    metric_status,
+                    progress_stage,
+                    progress_title,
+                )
+                print(contextual_result.message)
+                print(summary)
                 continue
 
         model = load_model_name(
@@ -1484,19 +1589,19 @@ def main() -> int:
                     )
                 )
             )
-            print(response)
-            progress_renderer(
-                ExecutionProgressEvent(
-                    stage=ExecutionProgressStage.FAILED,
-                    title="Выбранная модель недоступна",
-                )
-            )
-            progress_renderer.close()
+            request_metrics.mark_phase(RequestPhase.SAVING)
             append_log(
                 context.log_file,
                 "ERROR",
                 response,
             )
+            summary = finish_request(
+                RequestStatus.FAILED,
+                ExecutionProgressStage.FAILED,
+                "Выбранная модель недоступна",
+            )
+            print(response)
+            print(summary)
             continue
 
         context.append_message(
@@ -1567,30 +1672,34 @@ def main() -> int:
             .build_instruction()
         )
 
-        ok, response = call_ollama_chat(
-            context.model,
-            request_messages,
-        )
+        request_metrics.mark_phase(RequestPhase.MODEL_WAIT)
+        try:
+            chat_response = request_ollama_chat(
+                context.model,
+                request_messages,
+            )
+        except KeyboardInterrupt:
+            request_metrics.mark_phase(RequestPhase.SAVING)
+            append_log(
+                context.log_file,
+                "WARNING",
+                "Request cancelled by user.",
+            )
+            summary = finish_request(
+                RequestStatus.CANCELLED,
+                ExecutionProgressStage.CANCELLED,
+                "Обработка отменена",
+            )
+            print(summary)
+            continue
+
+        request_metrics.record_usage(chat_response.usage)
+        request_metrics.mark_phase(RequestPhase.RESPONSE_PROCESSING)
+        ok = chat_response.ok
+        response = chat_response.content
 
         label = "VEGA" if ok else "ERROR"
-
-        progress_renderer(
-            ExecutionProgressEvent(
-                stage=(
-                    ExecutionProgressStage.COMPLETED
-                    if ok
-                    else ExecutionProgressStage.FAILED
-                ),
-                title=(
-                    "Ответ готов"
-                    if ok
-                    else "Не удалось получить ответ модели"
-                ),
-            )
-        )
-        progress_renderer.close()
-
-        print(response)
+        request_metrics.mark_phase(RequestPhase.SAVING)
         append_log(
             context.log_file,
             label,
@@ -1602,6 +1711,27 @@ def main() -> int:
                 "assistant",
                 response,
             )
+
+        if chat_response.status is OllamaChatStatus.COMPLETED:
+            metric_status = RequestStatus.COMPLETED
+            progress_stage = ExecutionProgressStage.COMPLETED
+            progress_title = "Ответ готов"
+        elif chat_response.status is OllamaChatStatus.TIMED_OUT:
+            metric_status = RequestStatus.TIMED_OUT
+            progress_stage = ExecutionProgressStage.TIMED_OUT
+            progress_title = "Превышен тайм-аут"
+        else:
+            metric_status = RequestStatus.FAILED
+            progress_stage = ExecutionProgressStage.FAILED
+            progress_title = "Не удалось получить ответ модели"
+
+        summary = finish_request(
+            metric_status,
+            progress_stage,
+            progress_title,
+        )
+        print(response)
+        print(summary)
 
     return 0
 

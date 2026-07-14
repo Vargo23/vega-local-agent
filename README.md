@@ -10,13 +10,13 @@ gates.
 ## Current version
 
 ```text
-v2.13.0 - Controlled Coding Workflows
+v3.0.0 - Operator Console and Live Execution UX
 ```
 
 The previous stable release is:
 
 ```text
-v2.12.1 - Local State Integrity & Recovery Stabilization
+v2.13.0 - Controlled Coding Workflows
 ```
 
 ## Project status
@@ -36,6 +36,8 @@ VEGA is not currently presented as a production-ready autonomous agent.
 ## Key capabilities
 
 * Local CLI coding agent
+* Width-aware Operator Console with Unicode/ASCII fallback
+* Honest request-local live execution progress
 * Ollama model support
 * Project and file analysis
 * Documents and local RAG
@@ -921,26 +923,50 @@ text, prompts, evidence, arguments, results, payloads, handlers, callbacks,
 tokens, grants, environment values, secrets, full local paths, URL query
 parameters, and raw exceptions.
 
-## Live execution terminal UX
+## VEGA v3.0.0 - Operator Console and Live Execution UX
 
-The interactive CLI uses the selected model and local environment state in a
-compact prompt:
+The interactive CLI displays the canonical version, current workspace, selected
+model, and runtime readiness without the legacy framed ASCII banner:
 
 ```text
-╭─ VEGA ─ qwen2.5-coder:14b ─ LOCAL
-╰─› Напишите задачу…
+VEGA / OPERATOR CONSOLE                                v3.0.0
+──────────────────────────────────────────────────────────────
+
+workspace  VEGA_agent_package
+model      qwen2.5-coder:14b
+
+◇ Agent ready
+  Give me a mission, or type /help.
+
+vega ›
 ```
+
+The version, workspace, and model in this example are illustrative; the CLI
+reads them from the current runtime. Narrow terminals move the version to its
+own line and truncate long values without exceeding the detected width.
 
 Before a plan exists, VEGA shows only received, analysis, and planning spinner
 states—never a guessed percentage or synthetic progress bar. Once the real
 validated plan exists, the CLI displays its bounded user-facing step titles and
 uses the actual step count for live running, confirmation, completed, skipped,
-failed, and final states.
+failed, and final states. A request-local elapsed timer starts with request
+submission, updates while the request is active, and stops on success, failure,
+timeout, or user cancellation.
 
 TTY output may redraw one status line. Redirected output and tests receive plain
 sequential lines with no control sequences; terminals without Unicode use an
-ASCII prompt, spinner, symbols, and bar. The renderer has no background thread
-and flushes every update.
+ASCII prompt, spinner, symbols, and bar. A daemon thread may redraw only the
+active TTY status line once per second; it owns no execution state, is stopped
+at every terminal outcome, and is not started for redirected output.
+
+After the final response, VEGA displays the exact request duration and, when
+Ollama supplies it, exact input, output, and total token usage. Counts come from
+Ollama's `prompt_eval_count` and `eval_count` response fields, including the
+final `done` chunk for streaming responses. Missing or incomplete server usage
+is reported as unavailable and is never replaced with an estimate or a false
+zero. Each session log receives a structured `REQUEST_METRICS` record with UTC
+start/end timestamps, duration, status, phase durations, and nullable counts;
+the record does not duplicate prompt or response content.
 
 Progress callbacks observe the existing
 `contextual runtime -> execute_plan() -> ToolExecutor` path and are fail-soft:
@@ -949,6 +975,11 @@ Progress events contain only bounded titles and counters. They exclude tool
 arguments, payloads, results, exception objects, tracebacks, prompts, and
 secrets. Execution progress is ephemeral current UI state; execution traces
 remain separate bounded diagnostic history.
+
+Upgrade instructions and the exact compatibility boundary are documented in
+the [v3.0.0 migration guide](docs/migrations/v3.0.0.md). See also the
+[v3.0 architecture](docs/v3.0-architecture.md) and
+[v3.0.0 release notes](docs/releases/v3.0.0.md).
 
 Persistence is disabled by default. Set `VEGA_EXECUTION_TRACE` to `1`, `true`,
 `yes`, or `on` to append UTF-8 JSONL to
