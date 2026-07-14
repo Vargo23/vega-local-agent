@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -12,6 +12,7 @@ from core.contextual_synthesis import (
     ContextualChatCallable,
     ContextualSynthesisRequest,
     ContextualSynthesisResult,
+    ContextualSynthesisStatus,
     synthesize_contextual_result,
 )
 from core.contextual_router import (
@@ -19,6 +20,12 @@ from core.contextual_router import (
     ContextualRoutingError,
     load_tool_routing_policy,
     route_contextual_request,
+)
+from core.execution_trace import (
+    ExecutionTrace,
+    TraceRecorder,
+    TraceStatus,
+    TraceStep,
 )
 from core.intent_analyzer import analyze_intent
 from core.model_selection import (
@@ -30,6 +37,7 @@ from core.model_selection import (
 from core.plan_executor import (
     PlanExecutionResult,
     PlanExecutionStatus,
+    StepExecutionObservation,
     execute_plan,
 )
 from core.production_snapshot import ProductionSnapshot
@@ -60,6 +68,7 @@ class ContextualRuntimeResult:
     synthesis_result: ContextualSynthesisResult | None = None
     model_decision: ModelSelectionDecision | None = None
     context_budget_result: ContextBudgetResult | None = None
+    execution_trace: ExecutionTrace | None = None
 
     @property
     def handled(self) -> bool:
@@ -95,6 +104,7 @@ def try_execute_contextual_request(
     ) = None,
     installed_models: Sequence[str] | None = None,
     production_snapshot: ProductionSnapshot | None = None,
+    trace_callback: Callable[[ExecutionTrace], object] | None = None,
 ) -> ContextualRuntimeResult:
     """
     Attempt contextual execution before model fallback.
@@ -120,6 +130,29 @@ def try_execute_contextual_request(
             reason="empty_input",
         )
 
+    recorder = TraceRecorder(request_type="contextual")
+
+    def note_trace_recording_failure() -> None:
+        try:
+            recorder.record_error("trace_recording_failed")
+        except Exception:
+            return
+
+    def finish_trace(
+        status: TraceStatus,
+        *error_codes: str,
+    ) -> ExecutionTrace | None:
+        try:
+            trace = recorder.finalize(status, error_codes=tuple(error_codes))
+        except Exception:
+            return None
+        if trace_callback is not None:
+            try:
+                trace_callback(trace)
+            except Exception:
+                return trace
+        return trace
+
     if production_snapshot is not None:
         if not isinstance(production_snapshot, ProductionSnapshot):
             raise TypeError(
@@ -130,6 +163,10 @@ def try_execute_contextual_request(
                 status=ContextualRuntimeStatus.BLOCKED,
                 message=_BLOCKED_MESSAGE,
                 reason="production_snapshot_blocked",
+                execution_trace=finish_trace(
+                    TraceStatus.BLOCKED,
+                    "production_snapshot_blocked",
+                ),
             )
         registry = production_snapshot.tool_mapping
         capability_config = production_snapshot.tool_capabilities
@@ -146,6 +183,10 @@ def try_execute_contextual_request(
                 f"project root is not a directory: {root}"
             ),
             reason="invalid_project_root",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "invalid_project_root",
+            ),
         )
 
     if registry is None:
@@ -168,6 +209,10 @@ def try_execute_contextual_request(
             status=ContextualRuntimeStatus.BLOCKED,
             message=_BLOCKED_MESSAGE,
             reason="production_snapshot_blocked",
+            execution_trace=finish_trace(
+                TraceStatus.BLOCKED,
+                "production_snapshot_blocked",
+            ),
         )
 
     try:
@@ -182,6 +227,10 @@ def try_execute_contextual_request(
                 f"{exc}"
             ),
             reason="policy_error",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "policy_error",
+            ),
         )
 
     if not policy.enabled:
@@ -214,6 +263,10 @@ def try_execute_contextual_request(
                 status=ContextualRuntimeStatus.BLOCKED,
                 message=_BLOCKED_MESSAGE,
                 reason="production_snapshot_blocked",
+                execution_trace=finish_trace(
+                    TraceStatus.BLOCKED,
+                    "production_snapshot_blocked",
+                ),
             )
         model_policy = load_model_routing_policy(model_policy_config)
         from core.model_router import (
@@ -242,11 +295,34 @@ def try_execute_contextual_request(
             explicit_model=model,
             request_text=normalized_text,
         )
+        try:
+            from core.model_router import MODEL_PROFILES
+
+            known_model = str(
+                MODEL_PROFILES.get(model_decision.profile, {}).get("model", "")
+            )
+            safe_model = (
+                known_model
+                if known_model and known_model == model_decision.model
+                else ("explicit_model" if model_decision.model else "")
+            )
+            recorder.record_model(
+                profile=model_decision.profile,
+                model=safe_model,
+                reason_code=model_decision.reason_code,
+                fallback_used=model_decision.fallback_used,
+            )
+        except Exception:
+            note_trace_recording_failure()
     except (ModelRoutingPolicyError, OSError, TypeError, ValueError) as exc:
         return ContextualRuntimeResult(
             status=ContextualRuntimeStatus.FAILED,
             message=f"Contextual runtime error: {exc}",
             reason="model_policy_error",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "model_policy_error",
+            ),
         )
 
     try:
@@ -266,7 +342,70 @@ def try_execute_contextual_request(
                 f"{exc}"
             ),
             reason="routing_error",
+            execution_trace=finish_trace(
+                TraceStatus.FAILED,
+                "routing_error",
+            ),
         )
+
+    permission_risks: dict[str, str] = {}
+    domain = ""
+    try:
+        if production_snapshot is not None:
+            permission_risks = {
+                permission.tool_name: permission.risk
+                for permission in production_snapshot.permissions
+            }
+            owners = tuple(
+                item.name
+                for item in production_snapshot.domains
+                if item.enabled
+                and route_result.analysis.intent.value in item.intents
+            )
+            if len(owners) == 1:
+                domain = owners[0]
+        required_capabilities = tuple(
+            str(value)
+            for value in route_result.plan.metadata.get(
+                "required_capabilities",
+                (),
+            )
+        )
+        recorder.record_route(
+            intent=route_result.analysis.intent.value,
+            domain=domain,
+            required_capabilities=required_capabilities,
+            selected_tools=tuple(step.tool_name for step in route_result.plan.steps),
+            confirmation_required=route_result.requires_confirmation,
+        )
+        recorder.record_permissions(
+            tuple(
+                (
+                    "automatic"
+                    if step.required_permission in policy.automatic_permissions
+                    else "confirmation_required"
+                )
+                for step in route_result.plan.steps
+            )
+        )
+    except Exception:
+        permission_risks = {}
+        note_trace_recording_failure()
+
+    def observe_step(observation: StepExecutionObservation) -> None:
+        try:
+            recorder.record_step(
+                TraceStep(
+                    step_id=observation.step_id,
+                    tool_name=observation.tool_name,
+                    permission=observation.permission,
+                    risk=observation.risk,
+                    status=observation.status,
+                    error_code=observation.error_code,
+                )
+            )
+        except Exception:
+            note_trace_recording_failure()
 
     execution_result = execute_plan(
         route_result.plan,
@@ -274,6 +413,8 @@ def try_execute_contextual_request(
         automatic_permissions=(
             policy.automatic_permissions
         ),
+        risk_by_tool=permission_risks,
+        step_observer=observe_step,
     )
 
     status_map = {
@@ -288,10 +429,16 @@ def try_execute_contextual_request(
         ),
     }
 
-    deterministic_message = format_plan_execution_response(
-        execution_result,
-        intent=route_result.analysis.intent.value,
-    )
+    try:
+        deterministic_message = format_plan_execution_response(
+            execution_result,
+            intent=route_result.analysis.intent.value,
+        )
+    except Exception:
+        deterministic_message = (
+            "The controlled tool run finished, but its result could not be "
+            "formatted safely."
+        )
     synthesis_result = None
     context_budget_result = None
 
@@ -304,38 +451,63 @@ def try_execute_contextual_request(
         in {"document_analysis", "code_review"}
         and execution_result.steps
     ):
-        step = execution_result.steps[-1]
-        evidence = _extract_synthesis_evidence(
-            step.tool_name,
-            step.data,
-        )
-        if evidence:
-            budget_profile = (
-                model_decision.profile
-                if model_decision.profile in model_policy.context_budgets
-                else model_policy.fallback_profile
+        try:
+            step = execution_result.steps[-1]
+            evidence = _extract_synthesis_evidence(
+                step.tool_name,
+                step.data,
             )
-            context_budget_result = apply_context_budget(
-                evidence,
-                model_policy.context_budgets[budget_profile],
-                head_ratio=model_policy.head_ratio,
+            if evidence:
+                budget_profile = (
+                    model_decision.profile
+                    if model_decision.profile in model_policy.context_budgets
+                    else model_policy.fallback_profile
+                )
+                context_budget_result = apply_context_budget(
+                    evidence,
+                    model_policy.context_budgets[budget_profile],
+                    head_ratio=model_policy.head_ratio,
+                )
+                try:
+                    recorder.record_context_budget(context_budget_result.metadata)
+                except Exception:
+                    note_trace_recording_failure()
+                synthesis_result = synthesize_contextual_result(
+                    ContextualSynthesisRequest(
+                        original_request=normalized_text,
+                        intent=route_result.analysis.intent.value,
+                        tool_name=step.tool_name,
+                        evidence=context_budget_result.evidence,
+                    ),
+                    model=model_decision.model,
+                    chat=chat_callable,
+                )
+                try:
+                    recorder.record_synthesis(failed=not synthesis_result.ok)
+                except Exception:
+                    note_trace_recording_failure()
+        except Exception:
+            synthesis_result = ContextualSynthesisResult(
+                ContextualSynthesisStatus.FAILED,
+                reason="synthesis_failed",
             )
-            synthesis_result = synthesize_contextual_result(
-                ContextualSynthesisRequest(
-                    original_request=normalized_text,
-                    intent=route_result.analysis.intent.value,
-                    tool_name=step.tool_name,
-                    evidence=context_budget_result.evidence,
-                ),
-                model=model_decision.model,
-                chat=chat_callable,
-            )
+            try:
+                recorder.record_synthesis(failed=True)
+            except Exception:
+                note_trace_recording_failure()
 
     message = (
         synthesis_result.response
         if synthesis_result is not None and synthesis_result.ok
         else deterministic_message
     )
+
+    trace_status = {
+        PlanExecutionStatus.COMPLETED: TraceStatus.COMPLETED,
+        PlanExecutionStatus.BLOCKED: TraceStatus.BLOCKED,
+        PlanExecutionStatus.FAILED: TraceStatus.FAILED,
+    }[execution_result.status]
+    execution_trace = finish_trace(trace_status)
 
     return ContextualRuntimeResult(
         status=status_map[execution_result.status],
@@ -346,6 +518,7 @@ def try_execute_contextual_request(
         synthesis_result=synthesis_result,
         model_decision=model_decision,
         context_budget_result=context_budget_result,
+        execution_trace=execution_trace,
     )
 
 

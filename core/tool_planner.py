@@ -245,6 +245,7 @@ def plan_tools(
         max_steps=max_steps,
         metadata={
             "intent": analysis.intent.value,
+            "required_capabilities": tuple(required_capabilities),
             "confidence": analysis.confidence,
             "matched_signals": list(
                 analysis.matched_signals

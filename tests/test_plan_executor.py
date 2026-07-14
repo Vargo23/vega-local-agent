@@ -6,9 +6,14 @@ from core.execution_plan import (
 )
 from core.plan_executor import (
     PlanExecutionStatus,
+    StepExecutionObservation,
     execute_plan,
 )
-from core.tool_executor import ToolExecutor
+from core.tool_executor import (
+    ToolExecutionResult,
+    ToolExecutionStatus,
+    ToolExecutor,
+)
 
 
 def _plan(
@@ -296,3 +301,100 @@ def test_invalid_executor_is_rejected() -> None:
         match="ToolExecutor",
     ):
         execute_plan(plan, object())
+
+
+def test_step_observer_receives_only_safe_metadata() -> None:
+    observations: list[StepExecutionObservation] = []
+    calls: list[dict[str, str]] = []
+    plan = _plan(
+        ToolCallStep(
+            step_id=1,
+            tool_name="read",
+            arguments={"secret": "TOP-SECRET-TRACE"},
+            required_permission="READ",
+        ),
+    )
+
+    result = execute_plan(
+        plan,
+        ToolExecutor({"read": lambda secret: calls.append({"secret": secret})}),
+        risk_by_tool={"read": "low"},
+        step_observer=observations.append,
+    )
+
+    assert result.ok
+    assert calls == [{"secret": "TOP-SECRET-TRACE"}]
+    assert observations == [
+        StepExecutionObservation(1, "read", "READ", "low", "success", "")
+    ]
+    assert "TOP-SECRET-TRACE" not in repr(observations)
+
+
+def test_step_observer_failure_does_not_change_execution() -> None:
+    calls: list[str] = []
+    plan = _plan(ToolCallStep(1, "read", required_permission="READ"))
+
+    def observer(observation: StepExecutionObservation) -> None:
+        raise RuntimeError("observer failed")
+
+    result = execute_plan(
+        plan,
+        ToolExecutor({"read": lambda: calls.append("read")}),
+        step_observer=observer,
+    )
+
+    assert result.ok
+    assert calls == ["read"]
+
+
+def test_step_observer_sanitizes_untrusted_diagnostic_values() -> None:
+    observations: list[StepExecutionObservation] = []
+    plan = _plan(ToolCallStep(1, "read", required_permission="READ"))
+    executor = ToolExecutor({"read": lambda: None})
+
+    def unsafe_result(request):
+        return ToolExecutionResult(
+            ToolExecutionStatus.FAILED,
+            request.tool_name,
+            error="TOP-SECRET-TRACE",
+            error_code="TOP-SECRET-CODE",
+        )
+
+    executor.execute = unsafe_result
+    result = execute_plan(
+        plan,
+        executor,
+        risk_by_tool={"read": "TOP-SECRET-RISK"},
+        step_observer=observations.append,
+    )
+
+    assert not result.ok
+    assert observations == [
+        StepExecutionObservation(
+            1,
+            "read",
+            "READ",
+            "",
+            "failed",
+            "tool_execution_failed",
+        )
+    ]
+    assert "TOP-SECRET" not in repr(observations)
+
+
+def test_unexpected_executor_exception_fails_once_with_safe_code() -> None:
+    calls: list[str] = []
+    plan = _plan(ToolCallStep(1, "read", required_permission="READ"))
+    executor = ToolExecutor({"read": lambda: None})
+
+    def raises(request):
+        calls.append(request.tool_name)
+        raise RuntimeError("TOP-SECRET-TRACE")
+
+    executor.execute = raises
+    result = execute_plan(plan, executor)
+
+    assert result.status is PlanExecutionStatus.FAILED
+    assert calls == ["read"]
+    assert result.steps[0].error_code == "tool_execution_failed"
+    assert "TOP-SECRET-TRACE" not in repr(result)

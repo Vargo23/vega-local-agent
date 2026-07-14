@@ -43,6 +43,7 @@ class ModelSelectionDecision:
     requested_profile: str
     fallback_used: bool = False
     available: bool = True
+    reason_code: str = ""
 
 
 _REQUIRED_KEYS = frozenset(
@@ -216,6 +217,7 @@ def select_model(
             reason="Explicit model override has highest priority.",
             requested_profile=profile,
             available=True,
+            reason_code="explicit_override",
         )
 
     if mode is ModelSelectionMode.MANUAL or not policy.enabled:
@@ -224,6 +226,11 @@ def select_model(
             "Manual selection uses the stored profile."
             if mode is ModelSelectionMode.MANUAL
             else "Automatic routing is disabled; using the stored fallback profile."
+        )
+        reason_code = (
+            "manual_profile"
+            if mode is ModelSelectionMode.MANUAL
+            else "routing_disabled"
         )
     else:
         requested_profile = (
@@ -235,6 +242,11 @@ def select_model(
             f"Intent '{intent_name}' maps to profile '{requested_profile}'."
             if intent_name in policy.intent_profiles
             else f"Unknown intent uses fallback profile '{requested_profile}'."
+        )
+        reason_code = (
+            "intent_profile"
+            if intent_name in policy.intent_profiles
+            else "fallback_profile"
         )
         normalized_request = str(request_text or "").lower()
         deep_signal = next(
@@ -253,6 +265,7 @@ def select_model(
                     else "because the request reached the configured character threshold."
                 )
             )
+            reason_code = "deep_request_policy"
 
     candidates = _unique_profiles(
         (requested_profile, *policy.fallback_order, policy.fallback_profile)
@@ -267,6 +280,7 @@ def select_model(
                     f" Requested model is unavailable; fallback profile '{profile}' "
                     "is installed."
                 )
+                reason_code = "installed_model_fallback"
             return ModelSelectionDecision(
                 mode=mode,
                 intent=intent_name,
@@ -276,6 +290,7 @@ def select_model(
                 requested_profile=requested_profile,
                 fallback_used=fallback_used,
                 available=True,
+                reason_code=reason_code,
             )
 
     return ModelSelectionDecision(
@@ -287,6 +302,7 @@ def select_model(
         requested_profile=requested_profile,
         fallback_used=False,
         available=False,
+        reason_code="model_unavailable",
     )
 
 

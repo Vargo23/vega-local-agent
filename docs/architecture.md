@@ -377,10 +377,12 @@ make untrusted Python safe.
 ## v2.10 cross-layer reliability architecture
 
 The implementation contract for the v2.10 stabilization release is documented
-in [`docs/v2.10-architecture.md`](v2.10-architecture.md). The current branch
-implements only its runtime snapshot gate: one validated snapshot supplies the
-contextual catalog, permission policy, combined built-in/plugin mapping, and
-permission-enforced executor, with fail-closed bootstrap. Runtime-state
-ownership, redacted execution traces, the complete failure matrix, release
-identity, and later stages remain planned. Existing v2.0–v2.9 boundaries above
-remain authoritative unless that document explicitly narrows them.
+in [`docs/v2.10-architecture.md`](v2.10-architecture.md). Implemented stages now
+include the fail-closed runtime snapshot gate and bounded redacted contextual
+execution traces. Trace collection uses request-local state and payload-free
+plan observations; persistence is disabled by default, writes allowlisted
+UTF-8 JSONL only when explicitly enabled, and retains one bounded backup.
+Trace failures cannot alter execution results. Runtime-state ownership, the
+complete failure-path matrix, release identity, and later stages remain
+planned. Existing v2.0–v2.9 boundaries above remain authoritative unless that
+document explicitly narrows them.

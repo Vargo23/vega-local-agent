@@ -497,9 +497,32 @@ def print_about() -> None:
     print("  /exit")
 
 
-def handle_doctor_command(root: Path) -> None:
+def handle_doctor_command(root: Path, command: str = "/doctor") -> None:
+    from core.execution_trace import (
+        TRACE_RELATIVE_PATH,
+        format_trace_summary,
+        load_latest_trace,
+        trace_persistence_enabled,
+    )
     from core.model_router import get_model_status
     from rag.document_index import load_documents_index
+
+    tracing_enabled = trace_persistence_enabled()
+    latest_trace = load_latest_trace(root)
+    trace_path = root.resolve() / TRACE_RELATIVE_PATH
+
+    if command.strip().lower() == "/doctor trace latest":
+        if not tracing_enabled:
+            print("Execution tracing is disabled.")
+            return
+        if latest_trace is not None:
+            print(format_trace_summary(latest_trace))
+            return
+        if trace_path.exists():
+            print("Latest trace record is invalid.")
+        else:
+            print("No execution trace is available.")
+        return
 
     documents_dir = root / "data" / "documents"
     index_path = root / "data" / "index" / "documents_index.json"
@@ -528,6 +551,14 @@ def handle_doctor_command(root: Path) -> None:
     print(f"Index file: {'OK' if index_path.exists() else 'MISSING'}")
     print(f"Documents indexed: {documents_count}")
     print(f"Chunks indexed: {chunks_count}")
+    print(
+        "Execution trace persistence: "
+        f"{'enabled' if tracing_enabled else 'disabled'}"
+    )
+    print(
+        "Latest trace: "
+        f"{'available' if latest_trace is not None else 'unavailable'}"
+    )
     smoke_status = "available at scripts\\smoke_test.py" if smoke_test.exists() else "MISSING"
     print(f"Smoke test: {smoke_status}")
 
@@ -820,8 +851,8 @@ def handle_command(
         print(help_text())
     elif lower == "/status":
         print_status(root, log_file, model)
-    elif lower == "/doctor":
-        handle_doctor_command(root)
+    elif lower == "/doctor" or lower.startswith("/doctor "):
+        handle_doctor_command(root, command)
     elif lower == "/workspace":
         handle_workspace_command(root, log_file, model)
     elif lower == "/model" or lower.startswith("/model "):
@@ -1295,6 +1326,7 @@ def main() -> int:
             from core.contextual_runtime import (
                 try_execute_contextual_request,
             )
+            from core.execution_trace import append_trace
 
             contextual_result = (
                 try_execute_contextual_request(
@@ -1303,6 +1335,12 @@ def main() -> int:
                     tool_executor,
                     chat_callable=call_ollama_chat,
                     production_snapshot=production_runtime.snapshot,
+                    trace_callback=(
+                        lambda trace: append_trace(
+                            context.project_root,
+                            trace,
+                        )
+                    ),
                 )
             )
 

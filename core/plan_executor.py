@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable
 
 from core.execution_plan import ExecutionPlan
+from core.execution_trace import (
+    safe_trace_error_code,
+    safe_trace_permission,
+    safe_trace_risk,
+)
 from core.tool_executor import (
     ToolExecutionResult,
     ToolExecutionStatus,
@@ -20,6 +25,18 @@ class PlanExecutionStatus(str, Enum):
     COMPLETED = "completed"
     BLOCKED = "blocked"
     FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class StepExecutionObservation:
+    """Allowlisted, payload-free observation of one plan step decision."""
+
+    step_id: int
+    tool_name: str
+    permission: str
+    risk: str
+    status: str
+    error_code: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +185,8 @@ def execute_plan(
         "READ",
         "DRAFT",
     ),
+    risk_by_tool: Mapping[str, str] | None = None,
+    step_observer: Callable[[StepExecutionObservation], None] | None = None,
 ) -> PlanExecutionResult:
     """
     Execute a fully validated plan through ToolExecutor.
@@ -193,6 +212,39 @@ def execute_plan(
     registered_tools = set(
         executor.registered_tools()
     )
+    try:
+        configured_risks = dict(risk_by_tool or {})
+    except Exception:
+        configured_risks = {}
+
+    def observe(
+        step,
+        status: str,
+        error_code: str = "",
+    ) -> None:
+        if step_observer is None:
+            return
+        try:
+            safe_permission = safe_trace_permission(step.required_permission)
+            if not safe_permission:
+                return
+            safe_error_code = ""
+            if error_code:
+                safe_error_code = safe_trace_error_code(
+                    error_code,
+                    fallback="tool_execution_failed",
+                )
+            observation = StepExecutionObservation(
+                step_id=step.step_id,
+                tool_name=step.tool_name,
+                permission=safe_permission,
+                risk=safe_trace_risk(configured_risks.get(step.tool_name, "")),
+                status=status,
+                error_code=safe_error_code,
+            )
+            step_observer(observation)
+        except Exception:
+            return
 
     # Full preflight is deliberately completed before any
     # tool is called. This prevents partially executing a
@@ -202,6 +254,7 @@ def execute_plan(
             step.required_permission
             not in allowed_permissions
         ):
+            observe(step, "blocked", "permission_not_automatic")
             return PlanExecutionResult(
                 status=PlanExecutionStatus.BLOCKED,
                 goal=plan.goal,
@@ -215,6 +268,7 @@ def execute_plan(
             )
 
         if step.tool_name not in registered_tools:
+            observe(step, "blocked", "tool_unregistered")
             return PlanExecutionResult(
                 status=PlanExecutionStatus.BLOCKED,
                 goal=plan.goal,
@@ -237,6 +291,7 @@ def execute_plan(
         ]
 
         if missing_dependencies:
+            observe(step, "failed", "incomplete_dependencies")
             return PlanExecutionResult(
                 status=PlanExecutionStatus.FAILED,
                 goal=plan.goal,
@@ -249,12 +304,20 @@ def execute_plan(
                 blocked_tool_name=step.tool_name,
             )
 
-        tool_result = executor.execute(
-            ToolRequest(
-                tool_name=step.tool_name,
-                arguments=dict(step.arguments),
+        try:
+            tool_result = executor.execute(
+                ToolRequest(
+                    tool_name=step.tool_name,
+                    arguments=dict(step.arguments),
+                )
             )
-        )
+        except Exception:
+            tool_result = ToolExecutionResult(
+                status=ToolExecutionStatus.FAILED,
+                tool_name=step.tool_name,
+                error="Tool execution failed.",
+                error_code="tool_execution_failed",
+            )
 
         reported_error = ""
 
@@ -279,6 +342,24 @@ def execute_plan(
             )
         )
         step_results.append(step_result)
+
+        observation_error_code = tool_result.error_code
+        if not tool_result.ok and not observation_error_code:
+            observation_error_code = (
+                tool_result.status.value
+                if tool_result.status is not ToolExecutionStatus.FAILED
+                else "tool_execution_failed"
+            )
+        if observation_error_code:
+            observation_error_code = safe_trace_error_code(
+                observation_error_code,
+                fallback="tool_execution_failed",
+            )
+        observe(
+            step,
+            tool_result.status.value,
+            observation_error_code,
+        )
 
         if not tool_result.ok:
             detail = (
@@ -310,6 +391,7 @@ def execute_plan(
 __all__ = [
     "PlanExecutionResult",
     "PlanExecutionStatus",
+    "StepExecutionObservation",
     "StepExecutionResult",
     "execute_plan",
 ]

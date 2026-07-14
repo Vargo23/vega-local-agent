@@ -210,7 +210,7 @@ release and is part of the v2.10 plan.
 
 ## v2.10.0 planned stabilization
 
-Status: `snapshot gate implemented; remaining stabilization planned`
+Status: `snapshot gate and execution traces implemented; remaining stabilization planned`
 
 Implemented in `feature/v2.10-runtime-snapshot-gate`:
 
@@ -220,12 +220,19 @@ Implemented in `feature/v2.10-runtime-snapshot-gate`:
   issue or executor-construction failure; and
 * safe blocked execution plus focused integration and regression coverage.
 
+Implemented in `feature/v2.10-execution-traces`:
+
+* immutable execution traces containing only allowlisted machine decisions;
+* bounded identifiers, steps, serialization, active file, and one backup;
+* opt-in UTF-8 JSONL persistence, disabled by default;
+* payload-free contextual and plan-execution hooks; and
+* safe `/doctor` trace availability and latest-summary diagnostics.
+
 Remaining planned scope:
 
 * cross-layer validation of intents, domains, capabilities, tools, plugins,
   permissions, model profiles, budgets, and policy schema versions;
 * Git-safe ownership of mutable runtime state;
-* bounded, redacted machine-decision execution traces;
 * deterministic model and synthesis failure paths;
 * end-to-end routing, failure, plugin, and release regression tests; and
 * synchronized v2.10 release identity and documentation.

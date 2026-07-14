@@ -4,6 +4,11 @@ from core.contextual_runtime import (
     ContextualRuntimeStatus,
     try_execute_contextual_request,
 )
+from core.execution_trace import (
+    TraceStatus,
+    append_trace,
+    load_latest_trace,
+)
 from core.tool_executor import ToolExecutor
 
 
@@ -94,6 +99,7 @@ def test_disabled_policy_falls_back_to_chat(
 def test_unknown_intent_falls_back_to_chat(
     tmp_path: Path,
 ) -> None:
+    traces: list[object] = []
     registry = {
         "search_in_files": (
             lambda **arguments: arguments
@@ -107,12 +113,15 @@ def test_unknown_intent_falls_back_to_chat(
         registry=registry,
         capability_config=_search_capabilities(),
         policy_config=_policy(enabled=True),
+        trace_callback=traces.append,
     )
 
     assert result.status is (
         ContextualRuntimeStatus.NOT_HANDLED
     )
     assert result.reason == "unsupported_intent"
+    assert result.execution_trace is None
+    assert traces == []
 
 
 def test_enabled_safe_request_executes_tool(
@@ -163,6 +172,9 @@ def test_enabled_safe_request_executes_tool(
     assert calls[0]["query"] == "legacy_client"
     assert calls[0]["path"] == "."
     assert "No matches found." in result.message
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.COMPLETED
+    assert result.execution_trace.selected_tools == ("search_in_files",)
 
 
 def test_tool_reported_failure_does_not_fall_back(
@@ -192,6 +204,9 @@ def test_tool_reported_failure_does_not_fall_back(
     )
     assert result.handled is True
     assert "search failed" in result.message
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.FAILED
+    assert "tool_reported_failure" in result.execution_trace.error_codes
 
 
 def test_nonautomatic_permission_is_blocked(
@@ -222,6 +237,9 @@ def test_nonautomatic_permission_is_blocked(
     assert result.handled is True
     assert "WRITE" in result.message
     assert calls == []
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.BLOCKED
+    assert "permission_not_automatic" in result.execution_trace.error_codes
 
 
 def test_actionable_invalid_request_does_not_fall_back(
@@ -395,3 +413,71 @@ def test_synthesis_failure_preserves_deterministic_success(tmp_path: Path) -> No
     assert "Evidence" in result.message
     assert result.synthesis_result is not None
     assert not result.synthesis_result.ok
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.COMPLETED
+    assert "synthesis_failed" in result.execution_trace.error_codes
+
+
+def test_trace_persistence_failure_does_not_change_successful_response(
+    tmp_path: Path,
+) -> None:
+    calls: list[object] = []
+    registry = {
+        "search_in_files": lambda **arguments: {
+            "ok": True,
+            "error": None,
+            "data": {"results": []},
+        }
+    }
+
+    def fail(trace) -> None:
+        calls.append(trace)
+        raise RuntimeError("TOP-SECRET-TRACE")
+
+    result = try_execute_contextual_request(
+        SEARCH_REQUEST,
+        tmp_path,
+        ToolExecutor(registry),
+        registry=registry,
+        capability_config=_search_capabilities(),
+        policy_config=_policy(enabled=True),
+        trace_callback=fail,
+    )
+
+    assert result.ok
+    assert len(calls) == 1
+    assert result.execution_trace is calls[0]
+    assert "TOP-SECRET-TRACE" not in repr(result.execution_trace)
+
+
+def test_real_contextual_trace_persists_only_safe_result(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("VEGA_EXECUTION_TRACE", "1")
+    registry = {
+        "search_in_files": lambda **arguments: {
+            "ok": True,
+            "error": None,
+            "data": {"results": ["EVIDENCE-CONTENT-SECRET"]},
+        }
+    }
+
+    result = try_execute_contextual_request(
+        SEARCH_REQUEST,
+        tmp_path,
+        ToolExecutor(registry),
+        registry=registry,
+        capability_config=_search_capabilities(),
+        policy_config=_policy(enabled=True),
+        trace_callback=lambda trace: append_trace(tmp_path, trace),
+    )
+    latest = load_latest_trace(tmp_path)
+
+    assert result.ok
+    assert latest == result.execution_trace
+    persisted = (tmp_path / "logs/diagnostics/execution-traces.jsonl").read_text(
+        encoding="utf-8"
+    )
+    assert "EVIDENCE-CONTENT-SECRET" not in persisted
+    assert "legacy_client" not in persisted

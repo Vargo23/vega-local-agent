@@ -18,6 +18,7 @@ from core.production_runtime import (
 )
 from core.production_snapshot import ProductionSnapshot, build_production_snapshot
 from core.contextual_runtime import ContextualRuntimeStatus, try_execute_contextual_request
+from core.execution_trace import TraceStatus
 from core.tool_executor import ToolExecutionStatus, ToolExecutor, ToolRequest
 from permissions.session_grants import SessionGrantStore
 
@@ -242,6 +243,13 @@ def test_contextual_runtime_uses_snapshot_instead_of_caller_registry() -> None:
     assert result.status is ContextualRuntimeStatus.COMPLETED
     assert result.route_result is not None
     assert result.route_result.plan.steps[0].tool_name == "search_in_files"
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.COMPLETED
+    assert result.execution_trace.intent == "project_search"
+    assert result.execution_trace.domain == "coding"
+    assert result.execution_trace.required_capabilities == ("project.search",)
+    assert result.execution_trace.steps[0].risk == "low"
+    assert result.execution_trace.model == "explicit_model"
 
 
 def test_blocked_snapshot_stops_contextual_routing(monkeypatch) -> None:
@@ -261,4 +269,6 @@ def test_blocked_snapshot_stops_contextual_routing(monkeypatch) -> None:
 
     assert result.status is ContextualRuntimeStatus.BLOCKED
     assert result.reason == "production_snapshot_blocked"
+    assert result.execution_trace is not None
+    assert result.execution_trace.status is TraceStatus.BLOCKED
     assert called == []
