@@ -92,7 +92,7 @@ enforcement.
 <!-- VEGA DOCGEN START: security -->
 ## Generated security snapshot
 
-Project version: `v2.10.0`
+Project version: `v2.11.0`
 
 ### Documentation Builder policy
 
@@ -112,6 +112,7 @@ Project version: `v2.10.0`
 - `config/internet_policy.json`
 - `config/documentation_policy.json`
 - `config/release_policy.json`
+- `config/diagnostics_policy.json`
 
 ### Enforcement principles
 
@@ -131,6 +132,37 @@ Project version: `v2.10.0`
 * Automatic GitHub releases are disabled.
 * Validation commands must be predefined.
 * Release paths cannot escape the project root.
+
+## Runtime diagnostics security
+
+v2.11 diagnostics are local-only observers. Trace persistence remains opt-in and
+reports are created only by explicit `/doctor export`; remote telemetry is
+absent. Diagnostics never invoke tools, models, networks, or shell commands and
+never change permissions, routing, synthesis, or request results.
+
+The diagnostic data allowlist contains only bounded machine identifiers,
+booleans, counts, UTC identity fields, fixed codes, trace terminal aggregates,
+and release-file existence flags. Prompts, user/history text, evidence,
+file/patch contents, tool arguments/results, command output, query-bearing URLs,
+absolute user paths, environment data, tokens, cookies, credentials,
+confirmation/session data, raw exceptions, tracebacks, arbitrary representations,
+callables, handlers, and callbacks are prohibited.
+
+Policy fields, types, limits, and paths are validated atomically. Paths must be
+relative and project-confined and cannot use parent traversal, blocked
+directories, or symlink escape. Report writes use same-directory temporary files,
+flush, `fsync`, and atomic replacement. Retention deletes only exact safe report
+filenames and preserves unknown files. Trace/report file size, scan files,
+records, identifiers, collections, serialized bytes, backups, retained reports,
+and cleanup scans are bounded by hard caps.
+
+Corrupt or oversized trace records are skipped and represented only by fixed
+codes. The fixed vocabulary includes `diagnostics_policy_error`,
+`diagnostics_build_failed`, `diagnostics_serialization_failed`,
+`diagnostics_export_failed`, `diagnostics_report_too_large`,
+`diagnostics_retention_failed`, `trace_store_unavailable`,
+`trace_record_invalid`, and `trace_scan_limit_reached`. Trace locking is
+process-local only and is not interprocess locking.
 
 ## Agent Orchestrator security
 

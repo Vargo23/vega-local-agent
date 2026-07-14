@@ -64,10 +64,32 @@ Safe read-only Git access:
 
 Git Tools in v1.4.0 are read-only. Commit, tag, push, pull, checkout, reset, merge, rebase, configuration changes, and arbitrary Git command execution are unavailable.
 
+## /doctor commands
+
+```text
+/doctor
+/doctor help
+/doctor trace status
+/doctor trace latest
+/doctor trace summary
+/doctor export
+```
+
+`/doctor` shows a compact payload-free runtime summary. Trace commands read only
+the bounded local trace store. `/doctor export` is the only command that creates
+a report; it accepts no path argument and prints a relative path such as:
+
+```text
+Diagnostics report exported: logs/diagnostics/reports/doctor-20260714T120000000000Z.json
+```
+
+Unknown subcommands and extra export arguments show usage and do not create a
+file. No doctor output includes an absolute project path.
+
 <!-- VEGA DOCGEN START: commands -->
 ## Generated command reference
 
-Project version: `v2.10.0`
+Project version: `v2.11.0`
 
 This section is generated from `scripts/vega.py`.
 

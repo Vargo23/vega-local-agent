@@ -152,7 +152,7 @@ VEGA не должна:
 <!-- VEGA DOCGEN START: architecture -->
 ## Generated project snapshot
 
-Project version: `v2.10.0`
+Project version: `v2.11.0`
 
 This section is generated from the current project tree.
 
@@ -399,3 +399,17 @@ alter execution results. Mutable profile/task state is untracked and ignored;
 profile replacement is atomic. Stable failure codes and deterministic synthesis
 fallbacks complete the v2.10 failure matrix without introducing a second tool
 execution path.
+
+## v2.11 runtime diagnostics architecture
+
+The implemented v2.11 contract is documented in
+[`docs/v2.11-architecture.md`](v2.11-architecture.md). One local observer builds
+an immutable allowlisted report from the production snapshot and safe subsystem
+counts. It never receives a `ToolExecutor`, invokes a handler, launches a model,
+or changes execution, permissions, routing, synthesis, and results.
+
+Validated policy confines trace/report paths and hard-bounds file bytes, backups,
+scanned files and records, serialized report bytes, and retained reports. Trace
+rotation retains three backups by default and valid v2.10 records remain
+readable. `/doctor export` is explicit and atomic; no automatic or remote
+telemetry exists.

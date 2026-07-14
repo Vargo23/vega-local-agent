@@ -10,13 +10,13 @@ gates.
 ## Current version
 
 ```text
-v2.10.0 - Production Reliability and Execution Traces
+v2.11.0 - Runtime Diagnostics Evolution
 ```
 
-The previous functional release is:
+The previous stable release is:
 
 ```text
-v2.9.0 - Model Selection and Context Optimization
+v2.10.0 - Production Reliability and Execution Traces
 ```
 
 ## Project status
@@ -53,6 +53,7 @@ VEGA is not currently presented as a production-ready autonomous agent.
 * Validated cross-layer production runtime snapshot
 * Deterministic model selection and bounded synthesis context
 * Opt-in bounded and redacted local execution diagnostics
+* Explicit local runtime reports and bounded trace aggregates
 
 ## Safety model
 
@@ -609,13 +610,13 @@ The predefined test group is:
 
 ## Project status
 
-Current stable checkpoint:
+Historical stable checkpoint for that documentation milestone:
 
 ```text
 v2.7.0 - Context-Aware Tool Orchestration
 ```
 
-Next planned stage:
+Next stage recorded at that milestone:
 
 ```text
 v2.8.0 - Plugin and Domain API
@@ -932,3 +933,23 @@ profile writes use atomic replacement. Failure paths return stable safe
 messages/codes, and failed synthesis preserves the completed deterministic
 response. See [v2.10.0 release notes](docs/releases/v2.10.0.md) for migration
 impact and known limitations.
+
+## VEGA v2.11.0 - Runtime Diagnostics Evolution
+
+VEGA v2.11 adds one local-only diagnostics observer over the existing production
+runtime. `/doctor` builds a bounded immutable report, `/doctor trace status` and
+`/doctor trace summary` inspect the opt-in trace store, and `/doctor export`
+atomically writes an allowlisted JSON report under
+`logs/diagnostics/reports/`. No report is created without that explicit command.
+
+Trace persistence remains controlled by `VEGA_EXECUTION_TRACE`. The 5 MiB active
+file limit is unchanged, while validated policy now retains three backups by
+default and bounds files, records, report bytes, and report retention. Existing
+valid v2.10 JSONL records remain readable.
+
+Diagnostics never execute tools, call a model, send telemetry, or include
+prompts, user text, evidence, file contents, tool payloads, command output,
+credentials, absolute user paths, raw exceptions, or tracebacks. Locking remains
+process-local rather than interprocess-safe. See the
+[v2.11 architecture](docs/v2.11-architecture.md) and
+[v2.11.0 release notes](docs/releases/v2.11.0.md).
